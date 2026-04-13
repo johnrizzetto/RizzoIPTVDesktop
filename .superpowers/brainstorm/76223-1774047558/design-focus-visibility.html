@@ -1,0 +1,164 @@
+<h2>Design Section 2: Focus / Cursor Visibility</h2>
+<p class="subtitle">Making the selected item unmissable on a TV screen across the room</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Current Focus State</div>
+    <div class="mockup-body" style="padding: 16px; background: #06060F;">
+      <!-- Unfocused row -->
+      <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 6px; border-radius: 8px;">
+        <div style="width: 40px; height: 40px; border-radius: 7px; background: rgba(0,207,255,0.12); display: flex; align-items: center; justify-content: center; color: rgba(0,207,255,0.8); font-size: 16px; font-weight: bold;">C</div>
+        <div style="flex: 1;">
+          <div style="font-size: 14px; color: rgba(236,237,255,0.8);">CNN International</div>
+        </div>
+        <div style="font-size: 9px; color: #00E676; background: rgba(0,230,118,0.12); padding: 3px 6px; border-radius: 4px; display: flex; align-items: center; gap: 4px;">
+          <div style="width: 5px; height: 5px; border-radius: 50%; background: #00E676;"></div>
+          LIVE
+        </div>
+      </div>
+      <!-- "Focused" row - current subtle style -->
+      <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 6px; border-radius: 8px; background: #131330; border: 1px solid rgba(0,207,255,0.15);">
+        <div style="width: 40px; height: 40px; border-radius: 7px; background: rgba(0,207,255,0.12); display: flex; align-items: center; justify-content: center; color: rgba(0,207,255,0.8); font-size: 16px; font-weight: bold;">B</div>
+        <div style="flex: 1;">
+          <div style="font-size: 14px; color: #ECEDFF; font-weight: 600;">BBC World News</div>
+        </div>
+        <div style="font-size: 9px; color: #00E676; background: rgba(0,230,118,0.12); padding: 3px 6px; border-radius: 4px; display: flex; align-items: center; gap: 4px;">
+          <div style="width: 5px; height: 5px; border-radius: 50%; background: #00E676;"></div>
+          LIVE
+        </div>
+      </div>
+      <!-- Unfocused row -->
+      <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 6px; border-radius: 8px;">
+        <div style="width: 40px; height: 40px; border-radius: 7px; background: rgba(0,207,255,0.12); display: flex; align-items: center; justify-content: center; color: rgba(0,207,255,0.8); font-size: 16px; font-weight: bold;">S</div>
+        <div style="flex: 1;">
+          <div style="font-size: 14px; color: rgba(236,237,255,0.8);">Sky News</div>
+        </div>
+        <div style="font-size: 9px; color: #00E676; background: rgba(0,230,118,0.12); padding: 3px 6px; border-radius: 4px; display: flex; align-items: center; gap: 4px;">
+          <div style="width: 5px; height: 5px; border-radius: 50%; background: #00E676;"></div>
+          LIVE
+        </div>
+      </div>
+
+      <div style="margin-top: 12px; padding: 8px 12px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 6px;">
+        <span style="color: #EF4444; font-size: 11px;">Problem: Focused item barely stands out — thin 15% opacity border, subtle background shift. Hard to spot from 8+ feet away.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">New Focus State</div>
+    <div class="mockup-body" style="padding: 16px; background: #06060F;">
+      <!-- Unfocused row -->
+      <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 6px; border-radius: 8px;">
+        <div style="width: 40px; height: 40px; border-radius: 7px; background: rgba(0,207,255,0.12); display: flex; align-items: center; justify-content: center; color: rgba(0,207,255,0.8); font-size: 16px; font-weight: bold;">C</div>
+        <div style="flex: 1;">
+          <div style="font-size: 14px; color: rgba(236,237,255,0.5);">CNN International</div>
+        </div>
+        <div style="font-size: 9px; color: rgba(0,230,118,0.4); background: rgba(0,230,118,0.05); padding: 3px 6px; border-radius: 4px; display: flex; align-items: center; gap: 4px;">
+          <div style="width: 5px; height: 5px; border-radius: 50%; background: rgba(0,230,118,0.4);"></div>
+          LIVE
+        </div>
+      </div>
+      <!-- FOCUSED row - new bold style -->
+      <div style="display: flex; align-items: center; border-radius: 8px; overflow: hidden; border: 2px solid #00CFFF; box-shadow: 0 0 20px rgba(0,207,255,0.25), inset 0 0 30px rgba(0,207,255,0.05); transform: scale(1.03); margin-bottom: 6px; background: linear-gradient(90deg, rgba(0,207,255,0.1) 0%, rgba(0,207,255,0.03) 100%);">
+        <!-- Left accent bar -->
+        <div style="width: 4px; align-self: stretch; background: #00CFFF;"></div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; flex: 1;">
+          <div style="width: 40px; height: 40px; border-radius: 7px; background: rgba(0,207,255,0.2); display: flex; align-items: center; justify-content: center; color: #00CFFF; font-size: 16px; font-weight: bold;">B</div>
+          <div style="flex: 1;">
+            <div style="font-size: 15px; color: #FFFFFF; font-weight: 700;">BBC World News</div>
+          </div>
+          <div style="font-size: 9px; color: #00E676; background: rgba(0,230,118,0.12); padding: 3px 6px; border-radius: 4px; display: flex; align-items: center; gap: 4px; font-weight: bold;">
+            <div style="width: 5px; height: 5px; border-radius: 50%; background: #00E676;"></div>
+            LIVE
+          </div>
+        </div>
+      </div>
+      <!-- Unfocused row -->
+      <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 6px; border-radius: 8px;">
+        <div style="width: 40px; height: 40px; border-radius: 7px; background: rgba(0,207,255,0.12); display: flex; align-items: center; justify-content: center; color: rgba(0,207,255,0.8); font-size: 16px; font-weight: bold;">S</div>
+        <div style="flex: 1;">
+          <div style="font-size: 14px; color: rgba(236,237,255,0.5);">Sky News</div>
+        </div>
+        <div style="font-size: 9px; color: rgba(0,230,118,0.4); background: rgba(0,230,118,0.05); padding: 3px 6px; border-radius: 4px; display: flex; align-items: center; gap: 4px;">
+          <div style="width: 5px; height: 5px; border-radius: 50%; background: rgba(0,230,118,0.4);"></div>
+          LIVE
+        </div>
+      </div>
+
+      <div style="margin-top: 12px; padding: 8px 12px; background: rgba(0,230,118,0.08); border: 1px solid rgba(0,230,118,0.2); border-radius: 6px;">
+        <span style="color: #00E676; font-size: 11px;">Fixed: 2dp solid cyan border + outer glow + left accent bar + scale bump + brighter text + dimmed siblings. Impossible to miss.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="height: 24px;"></div>
+
+<h3>Poster Cards — Focus Comparison</h3>
+<p class="subtitle">VOD/Series grid cards get the same treatment</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Current Card Focus</div>
+    <div class="mockup-body" style="padding: 16px; background: #06060F; display: flex; gap: 10px; justify-content: center;">
+      <div style="width: 130px; border-radius: 10px; background: #0D0D1C; border: 1px solid #131328; overflow: hidden;">
+        <div style="height: 80px; background: linear-gradient(180deg, #131330, #0D0D1C); display: flex; align-items: center; justify-content: center; color: rgba(0,207,255,0.4); font-size: 24px; font-weight: bold;">A</div>
+        <div style="padding: 6px 8px;">
+          <div style="font-size: 10px; color: rgba(236,237,255,0.75);">Avengers</div>
+        </div>
+      </div>
+      <!-- Focused card - current -->
+      <div style="width: 130px; border-radius: 10px; background: #0D0D1C; border: 1.5px solid rgba(0,207,255,0.2); overflow: hidden; transform: scale(1.06);">
+        <div style="height: 80px; background: linear-gradient(180deg, #131330, #0D0D1C); display: flex; align-items: center; justify-content: center; color: rgba(0,207,255,0.4); font-size: 24px; font-weight: bold;">B</div>
+        <div style="padding: 6px 8px;">
+          <div style="font-size: 10px; color: #ECEDFF; font-weight: 600;">Batman</div>
+        </div>
+      </div>
+      <div style="width: 130px; border-radius: 10px; background: #0D0D1C; border: 1px solid #131328; overflow: hidden;">
+        <div style="height: 80px; background: linear-gradient(180deg, #131330, #0D0D1C); display: flex; align-items: center; justify-content: center; color: rgba(0,207,255,0.4); font-size: 24px; font-weight: bold;">C</div>
+        <div style="padding: 6px 8px;">
+          <div style="font-size: 10px; color: rgba(236,237,255,0.75);">Cars</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">New Card Focus</div>
+    <div class="mockup-body" style="padding: 16px; background: #06060F; display: flex; gap: 10px; justify-content: center;">
+      <div style="width: 130px; border-radius: 10px; background: #0D0D1C; border: 1px solid #131328; overflow: hidden; opacity: 0.7;">
+        <div style="height: 80px; background: linear-gradient(180deg, #131330, #0D0D1C); display: flex; align-items: center; justify-content: center; color: rgba(0,207,255,0.3); font-size: 24px; font-weight: bold;">A</div>
+        <div style="padding: 6px 8px;">
+          <div style="font-size: 10px; color: rgba(236,237,255,0.5);">Avengers</div>
+        </div>
+      </div>
+      <!-- Focused card - new -->
+      <div style="width: 130px; border-radius: 10px; background: #0D0D1C; border: 2px solid #00CFFF; overflow: hidden; transform: scale(1.08); box-shadow: 0 0 24px rgba(0,207,255,0.3), 0 4px 16px rgba(0,0,0,0.5);">
+        <div style="height: 80px; background: linear-gradient(180deg, #131330, #0D0D1C); display: flex; align-items: center; justify-content: center; color: #00CFFF; font-size: 24px; font-weight: bold;">B</div>
+        <div style="padding: 6px 8px;">
+          <div style="font-size: 11px; color: #FFFFFF; font-weight: 700;">Batman</div>
+        </div>
+      </div>
+      <div style="width: 130px; border-radius: 10px; background: #0D0D1C; border: 1px solid #131328; overflow: hidden; opacity: 0.7;">
+        <div style="height: 80px; background: linear-gradient(180deg, #131330, #0D0D1C); display: flex; align-items: center; justify-content: center; color: rgba(0,207,255,0.3); font-size: 24px; font-weight: bold;">C</div>
+        <div style="padding: 6px 8px;">
+          <div style="font-size: 10px; color: rgba(236,237,255,0.5);">Cars</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 24px; padding: 16px; background: rgba(0,207,255,0.05); border: 1px solid rgba(0,207,255,0.15); border-radius: 8px;">
+  <h3 style="margin-top: 0; color: #00CFFF;">Focus Changes Summary</h3>
+  <ul style="color: #b0b0c0; font-size: 14px; line-height: 1.8;">
+    <li><strong>Border:</strong> 1.5dp @ 15% opacity → <strong>2dp solid cyan</strong> (full opacity)</li>
+    <li><strong>Glow:</strong> None → <strong>20dp cyan outer glow</strong> (box-shadow)</li>
+    <li><strong>Left accent bar:</strong> New — 4dp solid cyan on channel rows</li>
+    <li><strong>Background:</strong> Subtle tint → <strong>horizontal gradient</strong> (cyan→transparent)</li>
+    <li><strong>Scale:</strong> 1.02x → <strong>1.03x</strong> on rows, 1.06x → <strong>1.08x</strong> on cards</li>
+    <li><strong>Text:</strong> SemiBold → <strong>Bold + pure white</strong> on focused item</li>
+    <li><strong>Dimming:</strong> New — <strong>unfocused siblings fade to 50-70% opacity</strong> so focused item pops</li>
+  </ul>
+</div>

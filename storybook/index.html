@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rizzo IPTV — Component Browser</title>
+<style>
+:root {
+  --bg: #06060F;
+  --sidebar-bg: #030308;
+  --card-bg: #0D0D1C;
+  --card-hover: #131330;
+  --accent: #00CFFF;
+  --accent-dim: rgba(0,207,255,0.13);
+  --accent-border: #00CFFF;
+  --gold: #FFB800;
+  --text: #ECEDFF;
+  --text-muted: #42426A;
+  --border: #131328;
+  --nav-active: #10102C;
+  --nav-hover: #0C0C20;
+  --red: #EF4444;
+  --green: #00E676;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', sans-serif; background: #000; color: var(--text); }
+
+.app { display: flex; height: 100vh; }
+
+/* Storybook sidebar */
+.sb-sidebar { width: 240px; background: #0a0a14; border-right: 1px solid var(--border); overflow-y: auto; padding: 16px 0; flex-shrink: 0; }
+.sb-sidebar h1 { font-size: 14px; color: var(--accent); padding: 0 16px 12px; letter-spacing: 1px; }
+.sb-sidebar h2 { font-size: 10px; color: var(--text-muted); padding: 16px 16px 6px; text-transform: uppercase; letter-spacing: 2px; }
+.sb-sidebar .item { padding: 8px 16px; font-size: 13px; color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+.sb-sidebar .item:hover { color: var(--text); background: var(--nav-hover); }
+.sb-sidebar .item.active { color: var(--accent); background: var(--nav-active); border-left: 2px solid var(--accent); }
+
+/* Preview area */
+.preview { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.preview-header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #0a0a14; }
+.preview-header h2 { font-size: 16px; color: var(--text); }
+.preview-header .badge { font-size: 10px; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 2px 8px; }
+.preview-body { flex: 1; overflow: auto; }
+
+/* Component preview container */
+.stage { padding: 32px; background: var(--bg); min-height: 100%; }
+.stage.dark { background: var(--bg); }
+.stage.tv { background: #000; display: flex; align-items: center; justify-content: center; }
+
+/* Controls panel */
+.controls { padding: 16px 24px; border-top: 1px solid var(--border); background: #0a0a14; display: flex; gap: 16px; flex-wrap: wrap; }
+.controls label { font-size: 11px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px; }
+.controls select, .controls input[type="range"] { background: var(--card-bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; }
+.controls input[type="checkbox"] { accent-color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   COMPONENT STYLES (matching the real app)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Sidebar nav */
+.c-sidebar { width: 180px; background: var(--sidebar-bg); padding: 16px 8px; border-radius: 8px; }
+.c-sidebar.collapsed { width: 52px; text-align: center; }
+.c-nav-item { display: flex; align-items: center; padding: 10px 8px; border-radius: 6px; cursor: pointer; gap: 8px; transition: all 0.1s; }
+.c-nav-item .icon { font-size: 15px; color: var(--text-muted); }
+.c-nav-item .label { font-size: 13px; color: var(--text-muted); }
+.c-nav-item:hover { background: var(--nav-hover); }
+.c-nav-item:hover .icon, .c-nav-item:hover .label { color: var(--text); }
+.c-nav-item.active { background: var(--nav-active); }
+.c-nav-item.active::before { content: ''; width: 2px; height: 16px; background: var(--accent); border-radius: 1px; margin-right: 4px; }
+.c-nav-item.active .icon { color: var(--accent); }
+.c-nav-item.active .label { color: var(--text); font-weight: 600; }
+.c-sidebar.collapsed .c-nav-item { justify-content: center; }
+.c-sidebar.collapsed .label { display: none; }
+.c-sidebar.collapsed .c-nav-item.active::before { display: none; }
+
+/* Category row */
+.c-cat-row { display: flex; align-items: center; padding: 12px; border-radius: 6px; cursor: pointer; transition: all 0.1s; }
+.c-cat-row .name { flex: 1; font-size: 14px; color: var(--text); }
+.c-cat-row .chevron { font-size: 16px; color: var(--text-muted); }
+.c-cat-row:hover { background: var(--accent-dim); }
+.c-cat-row:hover .name { color: #fff; font-weight: 600; }
+.c-cat-row:hover .chevron { color: var(--accent); }
+.c-cat-row.focused { background: var(--accent-dim); outline: 2px solid var(--accent); }
+.c-cat-row.focused .name { color: #fff; font-weight: 600; }
+.c-cat-row.focused .chevron { color: var(--accent); }
+
+/* Channel row */
+.c-channel-row { display: flex; align-items: center; border-radius: 6px; cursor: pointer; transition: all 0.1s; }
+.c-channel-row .logo { width: 32px; height: 32px; border-radius: 4px; background: var(--accent-dim); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: bold; font-size: 14px; flex-shrink: 0; }
+.c-channel-row .info { flex: 1; padding: 8px 10px; }
+.c-channel-row .info .name { font-size: 14px; color: var(--text); }
+.c-channel-row .fav { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--text-muted); cursor: pointer; }
+.c-channel-row .fav.on { color: var(--gold); }
+.c-channel-row:hover { background: var(--accent-dim); }
+.c-channel-row:hover .name { color: #fff; font-weight: 600; }
+.c-channel-row.focused { background: var(--accent-dim); }
+.c-channel-row.focused::before { content: ''; width: 3px; align-self: stretch; background: var(--accent); border-radius: 2px; }
+
+/* Poster card */
+.c-poster { border-radius: 8px; background: var(--card-bg); overflow: hidden; cursor: pointer; transition: all 0.1s; width: 180px; }
+.c-poster .img { height: 130px; background: var(--card-bg); display: flex; align-items: center; justify-content: center; }
+.c-poster .img .letter { font-size: 28px; color: var(--text-muted); font-weight: bold; }
+.c-poster .bottom { padding: 6px 8px; display: flex; align-items: center; }
+.c-poster .bottom .title { flex: 1; font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.c-poster .bottom .fav { font-size: 12px; color: var(--text-muted); }
+.c-poster:hover { outline: 2px solid var(--accent); }
+.c-poster:hover .img { background: var(--card-hover); }
+.c-poster:hover .bottom .title { color: #fff; }
+.c-poster.focused { outline: 2px solid var(--accent); }
+
+/* Episode row */
+.c-ep-row { display: flex; align-items: center; padding: 10px 12px; border-radius: 6px; cursor: pointer; transition: all 0.1s; }
+.c-ep-row .num { font-size: 12px; color: var(--text-muted); font-weight: bold; width: 24px; }
+.c-ep-row .title { flex: 1; font-size: 13px; color: var(--text); }
+.c-ep-row .fav { font-size: 14px; color: var(--text-muted); width: 40px; text-align: center; cursor: pointer; }
+.c-ep-row:hover { background: var(--accent-dim); }
+.c-ep-row:hover .num { color: var(--accent); }
+.c-ep-row:hover .title { color: #fff; }
+
+/* Season header */
+.c-season-hdr { font-size: 10px; font-weight: bold; color: var(--gold); letter-spacing: 1px; padding: 6px 8px; }
+
+/* Search bar */
+.c-search { display: flex; align-items: center; padding: 10px 12px; border-radius: 8px; background: var(--card-bg); gap: 8px; }
+.c-search .icon { color: var(--text-muted); font-size: 14px; }
+.c-search .input { flex: 1; background: none; border: none; color: var(--text); font-size: 13px; outline: none; }
+.c-search .input::placeholder { color: var(--text-muted); }
+.c-search.focused { outline: 1px solid var(--accent); }
+.c-search.focused .icon { color: var(--accent); }
+
+/* Recent card */
+.c-recent { display: inline-flex; align-items: center; padding: 5px 8px; border-radius: 6px; background: var(--card-bg); gap: 6px; cursor: pointer; transition: all 0.1s; }
+.c-recent .logo { width: 24px; height: 24px; border-radius: 4px; background: var(--accent-dim); display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 10px; font-weight: bold; }
+.c-recent .name { font-size: 11px; color: var(--text); max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.c-recent:hover { background: var(--card-hover); }
+.c-recent:hover .name { color: #fff; }
+.c-recent .progress { width: 100%; height: 2px; background: var(--card-bg); border-radius: 1px; margin-top: 2px; }
+.c-recent .progress .bar { height: 100%; background: var(--accent); border-radius: 1px; }
+
+/* VOD Controls overlay */
+.c-vod-overlay { position: relative; width: 500px; height: 300px; background: #000; border-radius: 12px; overflow: hidden; }
+.c-vod-overlay .dim { position: absolute; inset: 0; background: rgba(0,0,0,0.35); }
+.c-vod-overlay .title { position: absolute; top: 24px; left: 24px; font-size: 16px; font-weight: 600; color: #fff; }
+.c-vod-overlay .center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
+.c-vod-overlay .center .icon { font-size: 56px; color: #fff; }
+.c-vod-overlay .center .hints { margin-top: 12px; font-size: 13px; color: rgba(255,255,255,0.35); display: flex; gap: 56px; }
+.c-vod-overlay .bottom { position: absolute; bottom: 0; left: 0; right: 0; padding: 16px 24px; background: linear-gradient(transparent, rgba(0,0,0,0.67)); }
+.c-vod-overlay .bottom .bar { width: 100%; height: 3px; background: rgba(255,255,255,0.2); border-radius: 2px; overflow: hidden; }
+.c-vod-overlay .bottom .bar .fill { height: 100%; background: var(--accent); border-radius: 2px; }
+.c-vod-overlay .bottom .times { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; }
+.c-vod-overlay .bottom .times .cur { color: #fff; font-weight: 500; }
+.c-vod-overlay .bottom .times .dur { color: rgba(255,255,255,0.5); }
+
+/* Next episode overlay */
+.c-next-ep { position: relative; width: 500px; height: 120px; background: #000; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+.c-next-ep .dim { position: absolute; inset: 0; background: rgba(0,0,0,0.7); border-radius: 12px; }
+.c-next-ep .content { position: relative; text-align: center; }
+.c-next-ep .label { font-size: 14px; color: var(--accent); font-weight: 600; }
+.c-next-ep .name { font-size: 18px; color: #fff; font-weight: bold; margin: 6px 0; }
+.c-next-ep .countdown { font-size: 13px; color: rgba(255,255,255,0.5); }
+
+/* Track picker */
+.c-track-picker { width: 340px; background: rgba(12,15,26,0.94); border-radius: 16px; padding: 24px; }
+.c-track-picker h3 { font-size: 18px; color: #fff; font-weight: bold; margin-bottom: 12px; }
+.c-track-picker .section-label { font-size: 11px; color: #4D8EFF; font-weight: bold; margin: 8px 0 4px; }
+.c-track-picker .track-row { padding: 10px 12px; border-radius: 8px; font-size: 15px; color: rgba(255,255,255,0.75); cursor: pointer; transition: all 0.1s; }
+.c-track-picker .track-row:hover { background: #162040; color: #fff; }
+.c-track-picker .track-row.active { color: var(--accent); }
+
+/* Server row */
+.c-server-row { display: flex; align-items: center; padding: 6px 8px; border-radius: 4px; gap: 8px; cursor: pointer; font-size: 11px; color: var(--text-muted); transition: all 0.1s; }
+.c-server-row .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted); }
+.c-server-row.active .dot { background: var(--accent); }
+.c-server-row.active { color: var(--accent); font-weight: 600; cursor: default; }
+.c-server-row:not(.active):hover { background: var(--nav-hover); color: var(--text); }
+
+/* Login */
+.c-login { width: 360px; padding: 32px; }
+.c-login h1 { font-size: 24px; color: var(--accent); font-weight: bold; text-align: center; margin-bottom: 16px; }
+.c-login .field { margin-bottom: 12px; }
+.c-login .field label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px; }
+.c-login .field input { width: 100%; background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; color: var(--text); font-size: 14px; outline: none; }
+.c-login .field input:focus { border-color: var(--accent); }
+.c-login .btn { width: 100%; padding: 12px; background: var(--accent); border: none; border-radius: 8px; color: #000; font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 8px; }
+
+/* Loading / Error */
+.c-loading { display: flex; align-items: center; justify-content: center; padding: 40px; }
+.c-error { text-align: center; padding: 40px; }
+.c-error .msg { color: var(--red); font-size: 13px; margin-bottom: 12px; }
+.c-error .retry { color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; padding: 8px; }
+.c-error .retry:hover { text-decoration: underline; }
+
+/* Spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { width: 28px; height: 28px; border: 2px solid transparent; border-top: 2px solid var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+
+/* Psyduck */
+.psyduck { text-align: center; }
+/* Arms press in against head then release outward — left/right motion in sync */
+@keyframes squeeze-l {
+  0%, 100% { transform: translateX(0px) rotate(0deg); }
+  50% { transform: translateX(6px) rotate(3deg); }
+}
+@keyframes squeeze-r {
+  0%, 100% { transform: translateX(0px) rotate(0deg); }
+  50% { transform: translateX(-6px) rotate(-3deg); }
+}
+.psyduck-left-arm { transform-origin: 66px 160px; animation: squeeze-l 0.9s ease-in-out infinite; }
+.psyduck-right-arm { transform-origin: 156px 164px; animation: squeeze-r 0.9s ease-in-out infinite; }
+
+/* Helpers */
+.flex-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.flex-col { display: flex; flex-direction: column; gap: 4px; }
+.mt { margin-top: 16px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sb-sidebar">
+    <h1>RIZZO STORYBOOK</h1>
+    <h2>Navigation</h2>
+    <div class="item active" data-component="sidebar">Sidebar</div>
+    <div class="item" data-component="search">Search Bar</div>
+    <h2>Content</h2>
+    <div class="item" data-component="categories">Category List</div>
+    <div class="item" data-component="channels">Channel List</div>
+    <div class="item" data-component="posters">Poster Grid</div>
+    <div class="item" data-component="episodes">Episodes View</div>
+    <div class="item" data-component="recent">Recently Watched</div>
+    <div class="item" data-component="favorites">Favorites</div>
+    <h2>Player</h2>
+    <div class="item" data-component="vod-controls">VOD Controls</div>
+    <div class="item" data-component="next-episode">Next Episode</div>
+    <div class="item" data-component="track-picker">Track Picker</div>
+    <h2>Overlays</h2>
+    <div class="item" data-component="servers">Server Switcher</div>
+    <div class="item" data-component="login">Login Screen</div>
+    <div class="item" data-component="states">Loading / Error</div>
+  </div>
+
+  <div class="preview">
+    <div class="preview-header">
+      <h2 id="componentName">Sidebar</h2>
+      <span class="badge">Compose · Android TV</span>
+    </div>
+    <div class="preview-body">
+      <div class="stage dark" id="stage"></div>
+    </div>
+    <div class="controls" id="controls"></div>
+  </div>
+</div>
+
+<script>
+const stage = document.getElementById('stage');
+const controls = document.getElementById('controls');
+const nameEl = document.getElementById('componentName');
+
+const components = {
+  sidebar: {
+    name: 'Sidebar',
+    render(opts) {
+      const collapsed = opts.collapsed;
+      return `
+        <div class="c-sidebar ${collapsed ? 'collapsed' : ''}" style="display:inline-block">
+          <div style="display:flex;align-items:center;gap:8px;padding:0 8px 12px">
+            <div style="width:28px;height:28px;background:var(--accent-dim);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:bold;font-size:12px">R</div>
+            ${!collapsed ? '<span style="color:var(--accent);font-size:16px;font-weight:bold">Rizzo</span>' : ''}
+          </div>
+          <div class="c-nav-item active"><span class="icon">▶</span>${!collapsed ? '<span class="label">Live</span>' : ''}</div>
+          <div class="c-nav-item"><span class="icon">▣</span>${!collapsed ? '<span class="label">Movies</span>' : ''}</div>
+          <div class="c-nav-item"><span class="icon">≡</span>${!collapsed ? '<span class="label">Shows</span>' : ''}</div>
+          <div class="c-nav-item"><span class="icon">♥</span>${!collapsed ? '<span class="label">Favorites</span>' : ''}</div>
+          <div style="flex:1;min-height:80px"></div>
+          <div class="c-nav-item"><span class="icon">⇤</span>${!collapsed ? '<span class="label">Sign Out</span>' : ''}</div>
+        </div>`;
+    },
+    controls: [{ type: 'checkbox', id: 'collapsed', label: 'Collapsed', default: false }]
+  },
+
+  search: {
+    name: 'Search Bar',
+    render(opts) {
+      return `
+        <div style="max-width:500px">
+          <div class="c-search ${opts.focused ? 'focused' : ''}">
+            <span class="icon">⌕</span>
+            <input class="input" placeholder="Search…" value="${opts.hasQuery ? 'ESPN' : ''}">
+            ${opts.hasQuery ? '<span style="color:var(--text-muted);cursor:pointer">✕</span>' : ''}
+          </div>
+        </div>`;
+    },
+    controls: [
+      { type: 'checkbox', id: 'focused', label: 'Focused', default: false },
+      { type: 'checkbox', id: 'hasQuery', label: 'Has Query', default: false }
+    ]
+  },
+
+  categories: {
+    name: 'Category List',
+    render(opts) {
+      const cats = ['US| Entertainment','US| Sports','US| News','UK| Entertainment','CA| Sports','DE| General'];
+      return `<div style="max-width:500px" class="flex-col">${cats.map((c,i) =>
+        `<div class="c-cat-row ${i===0 && opts.showFocus ? 'focused' : ''}">
+          <span class="name">${c}</span><span class="chevron">›</span>
+        </div>`).join('')}</div>`;
+    },
+    controls: [{ type: 'checkbox', id: 'showFocus', label: 'Show Focus State', default: true }]
+  },
+
+  channels: {
+    name: 'Channel List',
+    render(opts) {
+      const channels = [
+        { name: 'ESPN HD', letter: 'E', fav: true },
+        { name: 'CNN International', letter: 'C', fav: false },
+        { name: 'Fox Sports 1', letter: 'F', fav: false },
+        { name: 'NBC Sports', letter: 'N', fav: true },
+        { name: 'BBC World News', letter: 'B', fav: false }
+      ];
+      return `<div style="max-width:500px" class="flex-col">${channels.map((ch,i) =>
+        `<div class="c-channel-row ${i===0 && opts.showFocus ? 'focused' : ''}">
+          <div class="logo">${ch.letter}</div>
+          <div class="info"><span class="name">${ch.name}</span></div>
+          <div class="fav ${ch.fav ? 'on' : ''}">${ch.fav ? '♥' : '♡'}</div>
+        </div>`).join('')}</div>`;
+    },
+    controls: [{ type: 'checkbox', id: 'showFocus', label: 'Show Focus State', default: true }]
+  },
+
+  posters: {
+    name: 'Poster Grid',
+    render(opts) {
+      const movies = ['The Dark Knight','Inception','Interstellar','Oppenheimer','Dune Part Two','Gladiator II'];
+      return `<div class="grid">${movies.map((m,i) =>
+        `<div class="c-poster ${i===0 && opts.showFocus ? 'focused' : ''}">
+          <div class="img"><span class="letter">${m[0]}</span></div>
+          <div class="bottom"><span class="title">${m}</span><span class="fav">${i<2 ? '♥' : ''}</span></div>
+        </div>`).join('')}</div>`;
+    },
+    controls: [{ type: 'checkbox', id: 'showFocus', label: 'Show Focus State', default: true }]
+  },
+
+  episodes: {
+    name: 'Episodes View',
+    render(opts) {
+      const eps = [
+        { num: 1, title: 'Winter Is Coming' },
+        { num: 2, title: 'The Kingsroad' },
+        { num: 3, title: 'Lord Snow' },
+        { num: 4, title: 'Cripples, Bastards, and Broken Things' }
+      ];
+      return `<div style="max-width:500px">
+        <div class="c-season-hdr">SEASON 1  ·  4 ep</div>
+        <div class="flex-col">${eps.map((ep,i) =>
+          `<div class="c-ep-row">
+            <span class="num">${String(ep.num).padStart(2,'0')}</span>
+            <span class="title">${ep.title}</span>
+            <span class="fav">${i===0 ? '♥' : '♡'}</span>
+          </div>`).join('')}</div>
+        ${opts.multiSeason ? `<div class="c-season-hdr mt">SEASON 2  ·  3 ep</div>
+        <div class="flex-col">
+          <div class="c-ep-row"><span class="num">01</span><span class="title">The North Remembers</span><span class="fav">♡</span></div>
+          <div class="c-ep-row"><span class="num">02</span><span class="title">The Night Lands</span><span class="fav">♡</span></div>
+        </div>` : ''}
+      </div>`;
+    },
+    controls: [{ type: 'checkbox', id: 'multiSeason', label: 'Multi-Season', default: true }]
+  },
+
+  recent: {
+    name: 'Recently Watched',
+    render(opts) {
+      const items = [
+        { name: 'ESPN HD', letter: 'E', progress: 0 },
+        { name: 'The Dark Knight', letter: 'T', progress: 65 },
+        { name: 'Breaking Bad S3E4', letter: 'B', progress: 30 },
+        { name: 'CNN International', letter: 'C', progress: 0 }
+      ];
+      return `<div class="flex-row">${items.map(item =>
+        `<div class="c-recent">
+          <div style="display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:6px">
+              <div class="logo">${item.letter}</div>
+              <span class="name">${item.name}</span>
+            </div>
+            ${opts.showProgress && item.progress > 0 ? `<div class="progress"><div class="bar" style="width:${item.progress}%"></div></div>` : ''}
+          </div>
+        </div>`).join('')}</div>`;
+    },
+    controls: [{ type: 'checkbox', id: 'showProgress', label: 'Show Progress Bars', default: true }]
+  },
+
+  favorites: {
+    name: 'Favorites',
+    render() {
+      const favs = [
+        { name: 'ESPN HD', type: 'LIVE' },
+        { name: 'The Dark Knight', type: 'VOD' },
+        { name: 'Breaking Bad', type: 'SERIES' }
+      ];
+      return `<div style="max-width:500px" class="flex-col">${favs.map(f =>
+        `<div class="c-channel-row">
+          <div class="logo">${f.name[0]}</div>
+          <div class="info">
+            <span class="name">${f.name}</span>
+            <div style="font-size:9px;color:var(--text-muted)">${f.type}</div>
+          </div>
+          <div class="fav" style="color:var(--text-muted)">✕</div>
+        </div>`).join('')}</div>`;
+    },
+    controls: []
+  },
+
+  'vod-controls': {
+    name: 'VOD Controls Overlay',
+    render(opts) {
+      return `<div class="c-vod-overlay">
+        <div style="position:absolute;inset:0;background:linear-gradient(135deg,#1a0a2e,#0a1628);opacity:0.5"></div>
+        <div class="dim"></div>
+        <div class="title">The Dark Knight</div>
+        <div class="center">
+          <div class="icon">${opts.playing ? '⏸' : '▶'}</div>
+          <div class="hints"><span>◀◀ 10s</span><span>10s ▶▶</span></div>
+        </div>
+        <div class="bottom">
+          <div class="bar"><div class="fill" style="width:${opts.progress}%"></div></div>
+          <div class="times">
+            <span class="cur">${Math.floor(opts.progress*1.52)}:${String(Math.floor(Math.random()*59)).padStart(2,'0')}</span>
+            <span class="dur">2:32:00</span>
+          </div>
+        </div>
+      </div>`;
+    },
+    controls: [
+      { type: 'checkbox', id: 'playing', label: 'Playing', default: true },
+      { type: 'range', id: 'progress', label: 'Progress', min: 0, max: 100, default: 35 }
+    ]
+  },
+
+  'next-episode': {
+    name: 'Next Episode Overlay',
+    render(opts) {
+      return `<div class="c-next-ep">
+        <div class="dim"></div>
+        <div class="content">
+          <div class="label">Next Episode</div>
+          <div class="name">${opts.title || 'The Kingsroad'}</div>
+          <div class="countdown">Starting in ${opts.countdown}s  ·  Press BACK to cancel</div>
+        </div>
+      </div>`;
+    },
+    controls: [
+      { type: 'range', id: 'countdown', label: 'Countdown', min: 0, max: 5, default: 3 }
+    ]
+  },
+
+  'track-picker': {
+    name: 'Track Picker',
+    render(opts) {
+      return `<div class="c-track-picker">
+        <h3>Audio & Subtitles</h3>
+        <div class="section-label">AUDIO</div>
+        <div class="track-row active">ENGLISH · 6ch</div>
+        <div class="track-row">SPANISH · 2ch</div>
+        <div class="section-label">SUBTITLES</div>
+        <div class="track-row">Off</div>
+        <div class="track-row">ENGLISH</div>
+        <div class="track-row">SPANISH</div>
+        ${opts.showVideo ? `<div class="section-label">VIDEO</div>
+        <div class="track-row active">Fit</div>
+        <div class="track-row">Zoom</div>
+        <div class="track-row">Stretch</div>` : ''}
+      </div>`;
+    },
+    controls: [{ type: 'checkbox', id: 'showVideo', label: 'Show Video Section', default: true }]
+  },
+
+  servers: {
+    name: 'Server Switcher',
+    render() {
+      return `<div class="c-sidebar" style="display:inline-block;width:180px">
+        <div style="font-size:9px;font-weight:bold;color:var(--text-muted);letter-spacing:2px;padding:0 8px 6px">SERVERS</div>
+        <div class="c-server-row active"><span class="dot"></span>trexgaminghub</div>
+        <div class="c-server-row"><span class="dot"></span>gaminghubott</div>
+        <div class="c-server-row"><span class="dot"></span>vpn.gaminghubott</div>
+        <div class="c-server-row"><span class="dot"></span>gaminghubpro</div>
+        <div class="c-server-row"><span class="dot"></span>vpn.gaminghubpro</div>
+      </div>`;
+    },
+    controls: []
+  },
+
+  login: {
+    name: 'Login Screen',
+    render() {
+      return `<div class="c-login">
+        <h1>Rizzo IPTV</h1>
+        <div class="field"><label>Server URL</label><input placeholder="http://line.example.com"></div>
+        <div class="field"><label>Username</label><input placeholder=""></div>
+        <div class="field"><label>Password</label><input placeholder=""></div>
+        <button class="btn">Connect</button>
+      </div>`;
+    },
+    controls: []
+  },
+
+  states: {
+    name: 'Loading / Error States',
+    render(opts) {
+      if (opts.showError) {
+        return `<div class="c-error">
+          <div class="msg">Connection timed out. Check your server address.</div>
+          <div class="retry">Retry</div>
+        </div>`;
+      }
+      return `<div class="c-loading">
+        <div class="psyduck">
+          <svg viewBox="0 0 220 270" width="176" height="216">
+            <defs>
+              <radialGradient id="gBody" cx="42%" cy="32%"><stop offset="0%" stop-color="#FFD840"/><stop offset="80%" stop-color="#F0C010"/><stop offset="100%" stop-color="#E0B008"/></radialGradient>
+              <radialGradient id="gHead" cx="38%" cy="35%"><stop offset="0%" stop-color="#FFE048"/><stop offset="80%" stop-color="#F2C418"/><stop offset="100%" stop-color="#E4B410"/></radialGradient>
+              <radialGradient id="gBeak" cx="35%" cy="25%"><stop offset="0%" stop-color="#FFF8E8"/><stop offset="100%" stop-color="#F0E0C0"/></radialGradient>
+            </defs>
+
+            <!-- Shadow on ground -->
+            <ellipse cx="112" cy="258" rx="48" ry="6" fill="rgba(0,0,0,0.1)"/>
+
+            <!-- Body — very round and chubby, slightly left of center for 3/4 pose -->
+            <ellipse cx="112" cy="188" rx="58" ry="64" fill="url(#gBody)"/>
+            <!-- Subtle belly highlight -->
+            <ellipse cx="116" cy="198" rx="32" ry="36" fill="#FFE44A" opacity="0.3"/>
+
+            <!-- Tail stub — small, peeking out left -->
+            <path d="M56 198 Q42 190 40 200 Q39 210 50 208 Q56 206 58 202" fill="#E8B810"/>
+
+            <!-- Feet — small rounded -->
+            <ellipse cx="88" cy="248" rx="18" ry="8" fill="#E8B810"/>
+            <ellipse cx="136" cy="250" rx="18" ry="8" fill="#E8B810"/>
+
+            <!-- Left arm — stubby, pressed against left side of head -->
+            <g class="psyduck-left-arm">
+              <path d="M66 160 Q46 138 44 112 Q44 100 52 98 Q60 97 62 108 Q66 132 72 152 Z" fill="#F4C418"/>
+            </g>
+
+            <!-- Right arm — stubby, pressed against right side of head -->
+            <g class="psyduck-right-arm">
+              <path d="M156 164 Q172 142 174 116 Q175 104 168 102 Q160 100 158 112 Q154 136 150 156 Z" fill="#F4C418"/>
+            </g>
+
+            <!-- Head — large, round, slightly tilted right for 3/4 -->
+            <ellipse cx="112" cy="100" rx="50" ry="46" fill="url(#gHead)"/>
+
+            <!-- Single black hair tuft — curves to the left like reference -->
+            <path d="M102 56 Q96 30 104 22 Q110 28 106 54" fill="#1a1a1a" stroke="#111" stroke-width="0.5"/>
+            <path d="M108 54 Q108 28 114 20 Q118 28 114 52" fill="#1a1a1a" stroke="#111" stroke-width="0.5"/>
+            <path d="M96 60 Q86 38 96 28 Q102 36 100 58" fill="#1a1a1a" stroke="#111" stroke-width="0.5"/>
+
+            <!-- Eyes — big round white, right eye slightly larger (closer in 3/4 view) -->
+            <circle cx="96" cy="94" r="13" fill="#fff"/>
+            <circle cx="132" cy="92" r="15" fill="#fff"/>
+            <!-- Thin outline -->
+            <circle cx="96" cy="94" r="13" fill="none" stroke="#D0A820" stroke-width="0.6"/>
+            <circle cx="132" cy="92" r="15" fill="none" stroke="#D0A820" stroke-width="0.6"/>
+            <!-- Pupils — small and slightly off-center, dazed look -->
+            <circle cx="98" cy="96" r="4" fill="#111"/>
+            <circle cx="130" cy="94" r="4.5" fill="#111"/>
+            <!-- Eye highlights -->
+            <circle cx="95" cy="92" r="2.5" fill="#fff"/>
+            <circle cx="127" cy="90" r="3" fill="#fff"/>
+
+            <!-- Beak — wide cream/white, pointing slightly right -->
+            <path d="M100 114 Q90 118 88 126 Q86 134 96 136 Q112 140 136 138 Q150 136 152 128 Q154 120 146 114 Q130 108 100 114 Z" fill="url(#gBeak)"/>
+            <!-- Beak mouth line -->
+            <path d="M92 126 Q112 132 140 130 Q150 128 152 126" stroke="#D0B880" stroke-width="1.2" fill="none"/>
+            <!-- Nostrils -->
+            <circle cx="108" cy="122" r="1.5" fill="#D0B880"/>
+            <circle cx="122" cy="121" r="1.5" fill="#D0B880"/>
+          </svg>
+          <div style="color:var(--gold);font-size:13px;margin-top:4px;font-weight:500">Loading…</div>
+        </div>
+      </div>`;
+    },
+    controls: [{ type: 'checkbox', id: 'showError', label: 'Show Error', default: false }]
+  }
+};
+
+function renderComponent(id) {
+  const comp = components[id];
+  if (!comp) return;
+
+  nameEl.textContent = comp.name;
+
+  // Collect current control values
+  const opts = {};
+  (comp.controls || []).forEach(c => {
+    const el = document.getElementById('ctrl-' + c.id);
+    if (el) {
+      opts[c.id] = c.type === 'checkbox' ? el.checked : (c.type === 'range' ? parseInt(el.value) : el.value);
+    } else {
+      opts[c.id] = c.default;
+    }
+  });
+
+  stage.innerHTML = comp.render(opts);
+
+  // Only rebuild controls if switching components
+  if (controls.dataset.comp !== id) {
+    controls.dataset.comp = id;
+    controls.innerHTML = (comp.controls || []).map(c => {
+      if (c.type === 'checkbox') {
+        return `<label><span>${c.label}</span><input type="checkbox" id="ctrl-${c.id}" ${opts[c.id] ? 'checked' : ''}></label>`;
+      } else if (c.type === 'range') {
+        return `<label><span>${c.label}: <strong id="val-${c.id}">${opts[c.id]}</strong></span><input type="range" id="ctrl-${c.id}" min="${c.min}" max="${c.max}" value="${opts[c.id]}"></label>`;
+      } else if (c.type === 'select') {
+        return `<label><span>${c.label}</span><select id="ctrl-${c.id}">${c.options.map(o => `<option ${o===opts[c.id]?'selected':''}>${o}</option>`).join('')}</select></label>`;
+      }
+      return '';
+    }).join('');
+
+    // Bind events
+    (comp.controls || []).forEach(c => {
+      const el = document.getElementById('ctrl-' + c.id);
+      if (!el) return;
+      el.addEventListener('input', () => {
+        const valEl = document.getElementById('val-' + c.id);
+        if (valEl) valEl.textContent = el.value;
+        renderComponent(id);
+      });
+    });
+  }
+}
+
+// Sidebar nav
+let currentComp = 'sidebar';
+document.querySelectorAll('.sb-sidebar .item').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelector('.sb-sidebar .item.active')?.classList.remove('active');
+    el.classList.add('active');
+    currentComp = el.dataset.component;
+    controls.dataset.comp = ''; // force rebuild controls
+    renderComponent(currentComp);
+  });
+});
+
+renderComponent('sidebar');
+</script>
+</body>
+</html>

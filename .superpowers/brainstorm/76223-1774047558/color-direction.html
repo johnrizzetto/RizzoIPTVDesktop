@@ -1,0 +1,145 @@
+<h2>Color Direction: Incorporating Logo Gold</h2>
+<p class="subtitle">How much of the duck's yellow/gold should influence the UI?</p>
+
+<div class="cards">
+  <!-- Option A: Accent touches -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 0; overflow: hidden;">
+      <div style="display: flex; height: 260px; background: #06060F; font-family: system-ui;">
+        <!-- Sidebar -->
+        <div style="width: 200px; background: #030308; border-right: 1px solid #131328; display: flex; flex-direction: column; padding: 16px 10px; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px; margin-bottom: 8px;">
+            <div style="width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #cc8800, #FFB800); display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 0 12px rgba(255,184,0,0.25); flex-shrink: 0;">🦆</div>
+            <div>
+              <div style="font-size: 13px; font-weight: bold; color: #FFB800; letter-spacing: 2px;">RIZZO</div>
+              <div style="font-size: 9px; color: #42426A; letter-spacing: 1px;">PLAYER</div>
+            </div>
+          </div>
+          <div style="width: 100%; height: 1px; background: #131328;"></div>
+          <div style="padding: 10px; background: #10102C; border-radius: 6px; border: 1px solid rgba(0,207,255,0.2); display: flex; align-items: center; gap: 10px;">
+            <span style="color: #00CFFF; font-size: 14px;">▶</span>
+            <span style="color: #ECEDFF; font-size: 13px; font-weight: 600;">Live TV</span>
+          </div>
+          <div style="padding: 10px; display: flex; align-items: center; gap: 10px;">
+            <span style="color: #42426A; font-size: 14px;">◼</span>
+            <span style="color: #42426A; font-size: 13px;">Movies</span>
+          </div>
+        </div>
+        <!-- Main content -->
+        <div style="flex: 1; padding: 12px 16px;">
+          <div style="background: #0D0D1C; border: 1px solid #131328; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;">
+            <span style="color: #42426A; font-size: 11px;">⌕ Search…</span>
+          </div>
+          <div style="font-size: 10px; color: #42426A; letter-spacing: 2px; margin-bottom: 8px;">CONTINUE WATCHING</div>
+          <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+            <div style="width: 100px; height: 70px; background: #0D0D1C; border-radius: 8px; border: 1px solid #131328;"></div>
+            <div style="width: 100px; height: 70px; background: #0D0D1C; border-radius: 8px; border: 1px solid #131328;"></div>
+            <div style="width: 100px; height: 70px; background: #0D0D1C; border-radius: 8px; border: 1px solid #131328;"></div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <div style="flex: 1; height: 28px; background: #0D0D1C; border-radius: 6px;"></div>
+            <div style="flex: 1; height: 28px; background: #0D0D1C; border-radius: 6px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Gold Logo Only</h3>
+      <p>Logo area uses warm gold (#FFB800) for "RIZZO" text and logo glow. Rest of the UI stays cyan — keeps the current feel, logo just pops more.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Warm accent blend -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 0; overflow: hidden;">
+      <div style="display: flex; height: 260px; background: #06060F; font-family: system-ui;">
+        <!-- Sidebar -->
+        <div style="width: 200px; background: #030308; border-right: 1px solid #1a1828; display: flex; flex-direction: column; padding: 16px 10px; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px; margin-bottom: 8px;">
+            <div style="width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #cc8800, #FFB800); display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 0 12px rgba(255,184,0,0.25); flex-shrink: 0;">🦆</div>
+            <div>
+              <div style="font-size: 13px; font-weight: bold; color: #FFB800; letter-spacing: 2px;">RIZZO</div>
+              <div style="font-size: 9px; color: #42426A; letter-spacing: 1px;">PLAYER</div>
+            </div>
+          </div>
+          <div style="width: 100%; height: 1px; background: #1a1828;"></div>
+          <div style="padding: 10px; background: rgba(255,184,0,0.08); border-radius: 6px; border: 1px solid rgba(255,184,0,0.15); display: flex; align-items: center; gap: 10px;">
+            <span style="color: #FFB800; font-size: 14px;">▶</span>
+            <span style="color: #ECEDFF; font-size: 13px; font-weight: 600;">Live TV</span>
+          </div>
+          <div style="padding: 10px; display: flex; align-items: center; gap: 10px;">
+            <span style="color: #42426A; font-size: 14px;">◼</span>
+            <span style="color: #42426A; font-size: 13px;">Movies</span>
+          </div>
+        </div>
+        <!-- Main content -->
+        <div style="flex: 1; padding: 12px 16px;">
+          <div style="background: #0D0D1C; border: 1px solid #1a1828; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;">
+            <span style="color: #42426A; font-size: 11px;">⌕ Search…</span>
+          </div>
+          <div style="font-size: 10px; color: #FFB800; letter-spacing: 2px; font-weight: bold; margin-bottom: 8px;">CONTINUE WATCHING</div>
+          <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+            <div style="width: 100px; height: 70px; background: #0D0D1C; border-radius: 8px; border: 1.5px solid #FFB800; box-shadow: 0 0 8px rgba(255,184,0,0.15);"></div>
+            <div style="width: 100px; height: 70px; background: #0D0D1C; border-radius: 8px; border: 1px solid #131328;"></div>
+            <div style="width: 100px; height: 70px; background: #0D0D1C; border-radius: 8px; border: 1px solid #131328;"></div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <div style="flex: 1; height: 28px; background: #0D0D1C; border-radius: 6px;"></div>
+            <div style="flex: 1; height: 28px; background: #0D0D1C; border-radius: 6px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Gold Accent Throughout</h3>
+      <p>Gold becomes the primary accent — active nav items, section headers, focus rings, and the selected card border all use warm gold. Cyan is retired as primary accent.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Dual accent -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 0; overflow: hidden;">
+      <div style="display: flex; height: 260px; background: #06060F; font-family: system-ui;">
+        <!-- Sidebar -->
+        <div style="width: 200px; background: #030308; border-right: 1px solid #131328; display: flex; flex-direction: column; padding: 16px 10px; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px; margin-bottom: 8px;">
+            <div style="width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #cc8800, #FFB800); display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 0 12px rgba(255,184,0,0.25); flex-shrink: 0;">🦆</div>
+            <div>
+              <div style="font-size: 13px; font-weight: bold; background: linear-gradient(90deg, #FFB800, #00CFFF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 2px;">RIZZO</div>
+              <div style="font-size: 9px; color: #42426A; letter-spacing: 1px;">PLAYER</div>
+            </div>
+          </div>
+          <div style="width: 100%; height: 1px; background: #131328;"></div>
+          <div style="padding: 10px; background: #10102C; border-radius: 6px; border: 1px solid rgba(0,207,255,0.2); display: flex; align-items: center; gap: 10px;">
+            <span style="color: #00CFFF; font-size: 14px;">▶</span>
+            <span style="color: #ECEDFF; font-size: 13px; font-weight: 600;">Live TV</span>
+          </div>
+          <div style="padding: 10px; display: flex; align-items: center; gap: 10px;">
+            <span style="color: #42426A; font-size: 14px;">◼</span>
+            <span style="color: #42426A; font-size: 13px;">Movies</span>
+          </div>
+        </div>
+        <!-- Main content -->
+        <div style="flex: 1; padding: 12px 16px;">
+          <div style="background: #0D0D1C; border: 1px solid #131328; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;">
+            <span style="color: #42426A; font-size: 11px;">⌕ Search…</span>
+          </div>
+          <div style="font-size: 10px; color: #FFB800; letter-spacing: 2px; font-weight: bold; margin-bottom: 8px;">CONTINUE WATCHING</div>
+          <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+            <div style="width: 100px; height: 70px; background: #0D0D1C; border-radius: 8px; border: 1.5px solid #00CFFF; box-shadow: 0 0 8px rgba(0,207,255,0.2);"></div>
+            <div style="width: 100px; height: 70px; background: #0D0D1C; border-radius: 8px; border: 1px solid #131328;"></div>
+            <div style="width: 100px; height: 70px; background: #0D0D1C; border-radius: 8px; border: 1px solid #131328;"></div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <div style="flex: 1; height: 28px; background: #0D0D1C; border-radius: 6px;"></div>
+            <div style="flex: 1; height: 28px; background: #0D0D1C; border-radius: 6px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Dual Accent — Gold + Cyan</h3>
+      <p>Gold for branding (logo, "RIZZO" text, section headers) and cyan for interactive elements (focus rings, active nav, LIVE badge). Both colors from the logo palette. "RIZZO" text gets a gold→cyan gradient.</p>
+    </div>
+  </div>
+</div>

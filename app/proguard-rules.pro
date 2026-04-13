@@ -1,0 +1,3 @@
+-keep class com.rizzoplayer.iptv.data.model.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
