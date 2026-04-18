@@ -5,9 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,6 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -151,6 +157,31 @@ fun ContentArea(
                 favorites = favorites,
                 onSelectShow = viewModel::selectTmdbShow,
                 onToggleFavorite = { show ->
+                    viewModel.toggleFavorite(
+                        id   = show.id.toString(),
+                        name = show.name,
+                        type = "tmdb_show",
+                        icon = show.posterPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}$it" }
+                    )
+                }
+            )
+        }
+
+        is BrowseContent.TmdbSearchResults -> {
+            TmdbSearchResultsView(
+                content = content,
+                favorites = favorites,
+                onSelectMovie = viewModel::selectTmdbMovie,
+                onSelectShow = viewModel::selectTmdbShow,
+                onToggleMovieFavorite = { movie ->
+                    viewModel.toggleFavorite(
+                        id   = movie.id.toString(),
+                        name = movie.title,
+                        type = "tmdb_movie",
+                        icon = movie.posterPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}$it" }
+                    )
+                },
+                onToggleShowFavorite = { show ->
                     viewModel.toggleFavorite(
                         id   = show.id.toString(),
                         name = show.name,
@@ -509,6 +540,159 @@ private fun EpisodeRow(
 // ═══════════════════════════════════════════════════════════════════════════
 // EMPTY / LOADING / ERROR
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TMDB SEARCH RESULTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+@Composable
+fun TmdbSearchResultsView(
+    content: BrowseContent.TmdbSearchResults,
+    favorites: Map<String, Favorite>,
+    onSelectMovie: (TmdbMovie) -> Unit,
+    onSelectShow: (TmdbShow) -> Unit,
+    onToggleMovieFavorite: (TmdbMovie) -> Unit,
+    onToggleShowFavorite: (TmdbShow) -> Unit
+) {
+    val listState = rememberLazyListState()
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text(
+            "Results for \"${content.query}\"",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+        )
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 12.dp)
+        ) {
+            if (content.movies.isNotEmpty()) {
+                item(contentType = "MoviesSection") {
+                    SearchMovieRow(
+                        movies = content.movies,
+                        favorites = favorites,
+                        onSelect = onSelectMovie,
+                        onToggleFavorite = onToggleMovieFavorite
+                    )
+                }
+            }
+
+            if (content.shows.isNotEmpty()) {
+                item(contentType = "ShowsSection") {
+                    SearchShowRow(
+                        shows = content.shows,
+                        favorites = favorites,
+                        onSelect = onSelectShow,
+                        onToggleFavorite = onToggleShowFavorite
+                    )
+                }
+            }
+
+            if (content.movies.isEmpty() && content.shows.isEmpty()) {
+                item(contentType = "EmptySearch") {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No results found", fontSize = 14.sp, color = TextMuted)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchMovieRow(
+    movies: List<TmdbMovie>,
+    favorites: Map<String, Favorite>,
+    onSelect: (TmdbMovie) -> Unit,
+    onToggleFavorite: (TmdbMovie) -> Unit
+) {
+    val firstFocus = remember { FocusRequester() }
+
+    Column {
+        Text(
+            "Movies",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextMuted,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+        )
+        Box(modifier = Modifier.fillMaxWidth().focusGroup()) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(movies.size) { idx ->
+                    val movie = movies[idx]
+                    var focused by remember { mutableStateOf(false) }
+                    TmdbPosterCard(
+                        title = movie.title,
+                        posterPath = movie.posterPath,
+                        rating = movie.rating,
+                        year = movie.releaseDate.take(4),
+                        overview = movie.overview,
+                        isFocused = focused,
+                        isFavorite = favorites.containsKey(movie.id.toString()),
+                        onFocusChanged = { focused = it },
+                        onClick = { onSelect(movie) },
+                        onLongClick = { onToggleFavorite(movie) },
+                        modifier = if (idx == 0) Modifier.focusRequester(firstFocus) else Modifier
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchShowRow(
+    shows: List<TmdbShow>,
+    favorites: Map<String, Favorite>,
+    onSelect: (TmdbShow) -> Unit,
+    onToggleFavorite: (TmdbShow) -> Unit
+) {
+    val firstFocus = remember { FocusRequester() }
+
+    Column {
+        Text(
+            "TV Shows",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextMuted,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+        )
+        Box(modifier = Modifier.fillMaxWidth().focusGroup()) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(shows.size) { idx ->
+                    val show = shows[idx]
+                    var focused by remember { mutableStateOf(false) }
+                    TmdbPosterCard(
+                        title = show.name,
+                        posterPath = show.posterPath,
+                        rating = show.rating,
+                        year = show.firstAirDate.take(4),
+                        overview = show.overview,
+                        isFocused = focused,
+                        isFavorite = favorites.containsKey(show.id.toString()),
+                        onFocusChanged = { focused = it },
+                        onClick = { onSelect(show) },
+                        onLongClick = { onToggleFavorite(show) },
+                        modifier = if (idx == 0) Modifier.focusRequester(firstFocus) else Modifier
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun EmptyHint(message: String = "Select a category") {

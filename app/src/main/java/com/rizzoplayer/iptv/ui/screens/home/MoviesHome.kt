@@ -5,7 +5,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -19,11 +22,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +45,7 @@ import com.rizzoplayer.iptv.data.model.Favorite
 import com.rizzoplayer.iptv.data.model.TmdbMovie
 import com.rizzoplayer.iptv.ui.theme.*
 import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
+import androidx.compose.animation.core.animateFloatAsState
 
 @Composable
 fun MoviesHome(
@@ -200,7 +206,7 @@ fun TmdbMovieGrid(
     LazyVerticalGrid(
         state = listState,
         columns = GridCells.Adaptive(180.dp),
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().focusGroup(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -240,21 +246,26 @@ fun TmdbPosterCard(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isCardFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(if (isCardFocused) 1.05f else 1f, label = "cardScale")
+
     Box(modifier = modifier.fillMaxWidth()) {
         Card(
             modifier = Modifier
                 .width(180.dp)
                 .align(Alignment.TopCenter)
-                .focusable()
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .focusable(interactionSource = interactionSource)
                 .clickable(onClick = onClick)
                 .onFocusChanged { onFocusChanged(it.isFocused) }
                 .then(
-                    if (isFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(8.dp))
+                    if (isCardFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(8.dp))
                     else Modifier
                 ),
             shape = RoundedCornerShape(8.dp),
             colors = CardDefaults.cardColors(containerColor = CardBg),
-            elevation = CardDefaults.cardElevation(defaultElevation = if (isFocused) 8.dp else 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = if (isCardFocused) 8.dp else 2.dp)
         ) {
             Column {
                 Box {
@@ -305,7 +316,7 @@ fun TmdbPosterCard(
                         title,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (isFocused) TextPrimary else TextMuted,
+                        color = if (isCardFocused) TextPrimary else TextMuted,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -317,7 +328,7 @@ fun TmdbPosterCard(
         }
 
         // Expanded info on focus
-        if (isFocused && overview.isNotEmpty()) {
+        if (isCardFocused && overview.isNotEmpty()) {
             Card(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
