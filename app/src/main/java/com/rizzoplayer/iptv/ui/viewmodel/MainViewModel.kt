@@ -398,8 +398,7 @@ class MainViewModel(
     }
 
     fun retry() {
-        _state.update { it.copy(error = null) }
-        selectSection(_state.value.section)
+        retryReload()
     }
 
     /** Dismiss transient errors while keeping the user on the current page. */
