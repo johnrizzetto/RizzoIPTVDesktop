@@ -1,5 +1,6 @@
 package com.rizzoplayer.iptv.data.repository
 
+import com.rizzoplayer.iptv.BuildConfig
 import com.rizzoplayer.iptv.data.api.TorBoxApiService
 import com.rizzoplayer.iptv.data.api.TorrentioService
 import com.rizzoplayer.iptv.data.model.TorrentioStream
@@ -22,7 +23,7 @@ class TorBoxRepository(
     private val torBox: TorBoxApiService,
     private val torrentio: TorrentioService
 ) {
-    private val TORBOX_CONFIG = "torbox"
+    private val TORBOX_CONFIG = "torbox=${BuildConfig.TORBOX_API_KEY}"
 
     private fun parseInfoHash(stream: TorrentioStream): String? {
         val url = stream.url
@@ -56,6 +57,11 @@ class TorBoxRepository(
         files.filter { f -> f.name.endsWith(".mp4") || f.name.endsWith(".mkv") || f.name.endsWith(".avi") }
             .maxByOrNull { it.size }
 
+    private suspend fun getDownloadUrl(torrentId: Int, files: List<TorBoxFile>): String? {
+        val video = largestVideoFile(files) ?: return null
+        return torBox.requestDownloadLink(torrentId, video.id)
+    }
+
     fun resolveMovie(imdbId: String): Flow<StreamResolution> = flow {
         emit(StreamResolution.Searching)
 
@@ -70,45 +76,49 @@ class TorBoxRepository(
         val ranked = rankStreams(streams)
         val hashes = ranked.mapNotNull { parseInfoHash(it) }.distinct()
 
-        val cachedMap = try { torBox.checkCached(hashes).filterValues { it } } catch (e: Exception) { emptyMap() }
+        val cachedMap = try { torBox.checkCached(hashes) } catch (e: Exception) { emptyMap() }
 
+        // Find best stream: prefer cached, else highest quality
         val bestStream = ranked.firstOrNull { s ->
             parseInfoHash(s)?.let { cachedMap[it] == true } == true
         } ?: ranked.first()
 
-        val isCached = parseInfoHash(bestStream)?.let { cachedMap[it] == true } == true
+        val bestHash = parseInfoHash(bestStream)
+        val isCached = bestHash?.let { cachedMap[it] == true } == true
 
-        var torrentId: Int? = null
+        // Always call addMagnet to get a torrentId (works for both cached and uncached)
+        emit(StreamResolution.Queuing)
+        val result = try { torBox.addMagnet(bestStream.url) } catch (e: Exception) {
+            TorBoxAddResult(success = false, error = e.message)
+        }
+        if (!result.success || result.torrentId == null) {
+            emit(StreamResolution.Failed(result.message ?: "Failed to queue torrent")); return@flow
+        }
+        val torrentId = result.torrentId!!
 
         if (isCached) {
+            // Cached: skip polling, go straight to getting the download link
             emit(StreamResolution.Caching(100))
-        } else {
-            emit(StreamResolution.Queuing)
-            val result = try { torBox.addMagnet(bestStream.url) } catch (e: Exception) {
-                TorBoxAddResult(success = false, message = e.message)
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            if (info != null) {
+                val url = getDownloadUrl(torrentId, info.files)
+                if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
             }
-            if (!result.success || result.torrentId == null) {
-                emit(StreamResolution.Failed(result.message ?: "Failed to queue torrent")); return@flow
-            }
-            torrentId = result.torrentId
+            // Fall through to polling if something went wrong
         }
 
+        // Poll until ready or timeout
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < 90_000L) {
             delay(2_000)
-            if (torrentId != null) {
-                val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
-                if (info != null) {
-                    val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
-                    if (info.isCompleted) {
-                        val video = largestVideoFile(info.files)
-                        if (video != null) {
-                            val url = try { torBox.requestDownloadLink(torrentId, video.id) } catch (e: Exception) { null }
-                            if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
-                        }
-                    }
-                    emit(StreamResolution.Caching(pct))
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            if (info != null) {
+                val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
+                if (info.isCompleted) {
+                    val url = getDownloadUrl(torrentId, info.files)
+                    if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
                 }
+                emit(StreamResolution.Caching(pct))
             }
         }
         emit(StreamResolution.Failed("Timed out preparing movie"))
@@ -127,45 +137,44 @@ class TorBoxRepository(
 
         val ranked = rankStreams(streams)
         val hashes = ranked.mapNotNull { parseInfoHash(it) }.distinct()
-        val cachedMap = try { torBox.checkCached(hashes).filterValues { it } } catch (e: Exception) { emptyMap() }
+        val cachedMap = try { torBox.checkCached(hashes) } catch (e: Exception) { emptyMap() }
 
         val bestStream = ranked.firstOrNull { s ->
             parseInfoHash(s)?.let { cachedMap[it] == true } == true
         } ?: ranked.first()
 
-        val isCached = parseInfoHash(bestStream)?.let { cachedMap[it] == true } == true
+        val bestHash = parseInfoHash(bestStream)
+        val isCached = bestHash?.let { cachedMap[it] == true } == true
 
-        var torrentId: Int? = null
+        emit(StreamResolution.Queuing)
+        val result = try { torBox.addMagnet(bestStream.url) } catch (e: Exception) {
+            TorBoxAddResult(success = false, error = e.message)
+        }
+        if (!result.success || result.torrentId == null) {
+            emit(StreamResolution.Failed(result.message ?: "Failed to queue episode")); return@flow
+        }
+        val torrentId = result.torrentId!!
 
-        if (!isCached) {
-            emit(StreamResolution.Queuing)
-            val result = try { torBox.addMagnet(bestStream.url) } catch (e: Exception) {
-                TorBoxAddResult(success = false, message = e.message)
-            }
-            if (!result.success || result.torrentId == null) {
-                emit(StreamResolution.Failed(result.message ?: "Failed to queue episode")); return@flow
-            }
-            torrentId = result.torrentId
-        } else {
+        if (isCached) {
             emit(StreamResolution.Caching(100))
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            if (info != null) {
+                val url = getDownloadUrl(torrentId, info.files)
+                if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
+            }
         }
 
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < 90_000L) {
             delay(2_000)
-            if (torrentId != null) {
-                val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
-                if (info != null) {
-                    val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
-                    if (info.isCompleted) {
-                        val video = largestVideoFile(info.files)
-                        if (video != null) {
-                            val url = try { torBox.requestDownloadLink(torrentId, video.id) } catch (e: Exception) { null }
-                            if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
-                        }
-                    }
-                    emit(StreamResolution.Caching(pct))
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            if (info != null) {
+                val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
+                if (info.isCompleted) {
+                    val url = getDownloadUrl(torrentId, info.files)
+                    if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
                 }
+                emit(StreamResolution.Caching(pct))
             }
         }
         emit(StreamResolution.Failed("Timed out preparing episode"))
