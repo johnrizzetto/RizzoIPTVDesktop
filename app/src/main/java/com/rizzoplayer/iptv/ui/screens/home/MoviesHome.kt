@@ -205,8 +205,8 @@ fun TmdbMovieGrid(
 
     LazyVerticalGrid(
         state = listState,
-        columns = GridCells.Adaptive(180.dp),
-        modifier = Modifier.fillMaxSize().focusGroup(),
+        columns = GridCells.Adaptive(140.dp),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -253,7 +253,7 @@ fun TmdbPosterCard(
     Box(modifier = modifier.fillMaxWidth()) {
         Card(
             modifier = Modifier
-                .width(180.dp)
+                .width(140.dp)
                 .align(Alignment.TopCenter)
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .focusable(interactionSource = interactionSource)
@@ -281,7 +281,7 @@ fun TmdbPosterCard(
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(270.dp)
+                                .height(210.dp)
                         )
                     } else {
                         PosterFallback(title)
@@ -356,7 +356,7 @@ private fun PosterFallback(title: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(270.dp)
+            .height(210.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(CardBg),
         contentAlignment = Alignment.Center

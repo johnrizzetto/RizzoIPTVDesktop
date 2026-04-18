@@ -34,6 +34,7 @@ sealed class BrowseContent {
     data class TmdbShows(val items: List<TmdbShow>, val genreName: String) : BrowseContent()
     data class TmdbShowDetail(val show: TmdbShow, val seasons: List<TmdbSeason>) : BrowseContent()
     data class TmdbMovieDetail(val movie: TmdbMovie) : BrowseContent()
+    data class TmdbSearchResults(val movies: List<TmdbMovie>, val shows: List<TmdbShow>, val query: String) : BrowseContent()
 }
 
 data class EpgInfo(
@@ -193,13 +194,10 @@ class MainViewModel(
                 .debounce(400)
                 .distinctUntilChanged()
                 .collectLatest { query ->
-                    val section = _state.value.section
-                    if (query.length < 2 || (section != Section.VOD && section != Section.SERIES)) return@collectLatest
+                    if (query.length < 2) return@collectLatest
                     loadTmdb {
-                        if (section == Section.VOD)
-                            BrowseContent.TmdbMovies(tmdbRepository.searchMovies(query), "Search: $query")
-                        else
-                            BrowseContent.TmdbShows(tmdbRepository.searchShows(query), "Search: $query")
+                        val (movies, shows) = tmdbRepository.searchAll(query)
+                        BrowseContent.TmdbSearchResults(movies, shows, query)
                     }
                 }
         }
@@ -296,7 +294,8 @@ class MainViewModel(
             Category("-3", "🎬 Now Playing"),
             Category("-4", "📈 Trending"),
             Category("-5", "🍿 Top Netflix"),
-            Category("-6", "🍎 Top Apple TV+")
+            Category("-6", "🍎 Top Apple TV+"),
+            Category("-7", "🎭 Top HBO Max")
         ) + genres
         BrowseContent.Categories(all, Section.VOD)
     }
@@ -309,7 +308,8 @@ class MainViewModel(
             Category("-3", "📺 Airing Today"),
             Category("-4", "📈 Trending"),
             Category("-5", "🍿 Top Netflix"),
-            Category("-6", "🍎 Top Apple TV+")
+            Category("-6", "🍎 Top Apple TV+"),
+            Category("-7", "🎭 Top HBO Max")
         ) + genres
         BrowseContent.Categories(all, Section.SERIES)
     }
@@ -341,6 +341,7 @@ class MainViewModel(
                             -4 -> tmdbRepository.getTrendingMovies()
                             -5 -> tmdbRepository.getNetflixMovies()
                             -6 -> tmdbRepository.getAppleMovies()
+                            -7 -> tmdbRepository.getHboMovies()
                             else -> tmdbRepository.getPopularMovies()
                         }
                         BrowseContent.TmdbMovies(items, category.name)
@@ -352,6 +353,7 @@ class MainViewModel(
                             -4 -> tmdbRepository.getTrendingShows()
                             -5 -> tmdbRepository.getNetflixShows()
                             -6 -> tmdbRepository.getAppleShows()
+                            -7 -> tmdbRepository.getHboShows()
                             else -> tmdbRepository.getPopularShows()
                         }
                         BrowseContent.TmdbShows(items, category.name)

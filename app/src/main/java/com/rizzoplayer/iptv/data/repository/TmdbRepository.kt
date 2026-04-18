@@ -51,7 +51,7 @@ class TmdbRepository(
         diskCache.get(key, ttlMs)?.let { json ->
             return withContext(Dispatchers.Default) {
                 try {
-                    val type = object : TypeToken<List<T>>() {}.type
+                    val type = TypeToken.getParameterized(List::class.java, T::class.java).type
                     gson.fromJson(json, type) ?: emptyList()
                 } catch (e: Exception) {
                     emptyList()
@@ -145,6 +145,14 @@ class TmdbRepository(
         tmdb.discoverShows("with_networks=2552&sort_by=popularity.desc").results
     }
 
+    suspend fun getHboMovies(): List<TmdbMovie> = cachedList("tmdb_hbo_movies", TTL_CATALOGS) {
+        tmdb.discoverMovies("with_watch_providers=34&watch_region=US&sort_by=popularity.desc").results
+    }
+
+    suspend fun getHboShows(): List<TmdbShow> = cachedList("tmdb_hbo_shows", TTL_CATALOGS) {
+        tmdb.discoverShows("with_networks=49&sort_by=popularity.desc").results
+    }
+
     suspend fun getMoviesByGenre(tmdbGenreId: Int): List<TmdbMovie> = cachedList(
         "tmdb_movies_g_$tmdbGenreId", TTL_CATALOGS
     ) { tmdb.discoverMovies("with_genres=$tmdbGenreId&sort_by=popularity.desc").results }
@@ -190,6 +198,12 @@ class TmdbRepository(
         ttlMs = TTL_SEARCH,
         coalesceKey = "tmdb_search_show_${query.trim().lowercase()}"
     ) { tmdb.searchShows(query).results }
+
+    suspend fun searchAll(query: String): Pair<List<TmdbMovie>, List<TmdbShow>> = coroutineScope {
+        val movies = async { tmdb.searchMovies(query).results }
+        val shows  = async { tmdb.searchShows(query).results }
+        movies.await() to shows.await()
+    }
 
     private suspend fun cachedTorrentio(key: String, fetch: suspend () -> List<TorrentioStream>): List<TorrentioStream> {
         diskCache.get(key, TTL_TORRENTIO)?.let { json ->

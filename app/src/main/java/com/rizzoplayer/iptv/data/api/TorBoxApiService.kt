@@ -51,19 +51,19 @@ class TorBoxApiService(context: Context? = null) {
 
     suspend fun addMagnet(magnet: String): TorBoxAddResult = withContext(Dispatchers.IO) {
         val body = FormBody.Builder().add("magnet", magnet).build()
-        val json = post("$baseUrl/api/torrents/createtorrent", body)
+        val json = post("$baseUrl/api/torrents/create_torrent", body)
         try { gson.fromJson(json, TorBoxAddResult::class.java) } catch (e: Exception) {
             TorBoxAddResult(success = false, message = json)
         }
     }
 
     suspend fun getTorrentInfo(torrentId: Int): TorBoxTorrent? = withContext(Dispatchers.IO) {
-        val json = get("$baseUrl/api/torrents/mylist?id=$torrentId")
+        val json = get("$baseUrl/api/torrents/get_torrent?id=$torrentId")
         try { gson.fromJson(json, TorBoxTorrent::class.java) } catch (e: Exception) { null }
     }
 
     suspend fun requestDownloadLink(torrentId: Int, fileId: Int): String? = withContext(Dispatchers.IO) {
-        val json = get("$baseUrl/api/torrents/requestdl?token=&torrent_id=$torrentId&file_id=$fileId")
+        val json = get("$baseUrl/api/torrents/requestdl?torrent_id=$torrentId&file_id=$fileId")
         try {
             val resp = gson.fromJson(json, Map::class.java)
             (resp["url"] as? String) ?: (resp["download_url"] as? String)

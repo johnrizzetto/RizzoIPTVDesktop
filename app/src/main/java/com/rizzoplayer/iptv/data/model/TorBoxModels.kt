@@ -25,6 +25,6 @@ data class TorBoxTorrent(
     @SerializedName("status")           val status: String = "",
     @SerializedName("files")            val files: List<TorBoxFile> = emptyList()
 ) {
-    val isCompleted: Boolean get() = status == "completed" || status == "cached"
+    val isCompleted: Boolean get() = status == "completed" || status == "cached" || status == "seeding"
     val percentDone: Double get() = if (bytesTotal > 0) bytesDone.toDouble() / bytesTotal else downloadPresent
 }

@@ -199,8 +199,8 @@ fun TmdbShowGrid(
 
     LazyVerticalGrid(
         state = listState,
-        columns = GridCells.Adaptive(180.dp),
-        modifier = Modifier.fillMaxSize().focusGroup(),
+        columns = GridCells.Adaptive(140.dp),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
