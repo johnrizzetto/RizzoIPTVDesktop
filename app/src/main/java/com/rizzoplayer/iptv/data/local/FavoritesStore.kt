@@ -19,9 +19,17 @@ class FavoritesStore(private val context: Context) {
     private val gson = Gson()
     private val KEY = stringPreferencesKey("favorites_json")
 
+    /** Order-insensitive — use for containsKey/membership checks only. */
     val favorites: Flow<Map<String, Favorite>> = context.favDataStore.data.map { prefs ->
         parseFavorites(prefs[KEY])
     }
+
+    /**
+     * Order-sensitive list for UI display.
+     * Emits a new list whenever [move] changes item order,
+     * solving the Map.equals() order-insensitivity bug.
+     */
+    val favoritesList: Flow<List<Favorite>> = favorites.map { it.values.toList() }
 
     suspend fun add(favorite: Favorite) {
         context.favDataStore.edit { prefs ->

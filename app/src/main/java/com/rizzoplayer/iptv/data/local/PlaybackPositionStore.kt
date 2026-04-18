@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -14,7 +15,7 @@ import java.io.File
  */
 class PlaybackPositionStore(context: Context) {
 
-    data class Progress(val positionMs: Long = 0, val durationMs: Long = 0)
+    data class Progress(val positionMs: Long = 0, val durationMs: Long = 0, val isWatched: Boolean = false)
 
     private val file = File(context.filesDir, "playback_positions.json")
     private val gson = Gson()
@@ -23,9 +24,11 @@ class PlaybackPositionStore(context: Context) {
     init {
         if (file.exists()) {
             try {
-                val type = object : TypeToken<HashMap<String, Progress>>() {}.type
-                val loaded: HashMap<String, Progress>? = gson.fromJson(file.readText(), type)
-                if (loaded != null) positions.putAll(loaded)
+                runBlocking(Dispatchers.IO) {
+                    val type = object : TypeToken<HashMap<String, Progress>>() {}.type
+                    val loaded: HashMap<String, Progress>? = gson.fromJson(file.readText(), type)
+                    if (loaded != null) synchronized(positions) { positions.putAll(loaded) }
+                }
             } catch (_: Exception) {}
         }
     }
@@ -41,16 +44,27 @@ class PlaybackPositionStore(context: Context) {
     /** Save position + duration. Writes to memory instantly, disk async. */
     fun save(key: String, positionMs: Long, durationMs: Long = 0) {
         synchronized(positions) {
-            positions[key] = Progress(positionMs, durationMs)
+            val old = positions[key]
+            val watched = old?.isWatched ?: (durationMs > 0 && positionMs >= durationMs * 0.9)
+            positions[key] = Progress(positionMs, durationMs, watched)
         }
-        // Synchronous disk write — file is small (<50KB), takes <1ms
         writeToDisk()
     }
 
     /** Suspend-friendly save for use from coroutines. */
     suspend fun saveAsync(key: String, positionMs: Long, durationMs: Long = 0) {
         synchronized(positions) {
-            positions[key] = Progress(positionMs, durationMs)
+            val old = positions[key]
+            val watched = old?.isWatched ?: (durationMs > 0 && positionMs >= durationMs * 0.9)
+            positions[key] = Progress(positionMs, durationMs, watched)
+        }
+        withContext(Dispatchers.IO) { writeToDisk() }
+    }
+
+    suspend fun toggleWatched(key: String) {
+        synchronized(positions) {
+            val old = positions[key] ?: Progress()
+            positions[key] = old.copy(isWatched = !old.isWatched)
         }
         withContext(Dispatchers.IO) { writeToDisk() }
     }

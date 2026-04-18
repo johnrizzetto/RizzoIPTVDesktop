@@ -1,6 +1,11 @@
 package com.rizzoplayer.iptv.data.repository
 
 import com.google.gson.Gson
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import com.google.gson.reflect.TypeToken
 import com.rizzoplayer.iptv.data.api.IPTVApiService
 import com.rizzoplayer.iptv.data.local.CredentialsStore
@@ -26,16 +31,19 @@ class IPTVRepository(
     ): List<T> {
         // Disk cache check (memory layer is inside DiskCache)
         diskCache.get(key, ttlMs)?.let { json ->
-            return try {
-                val type = object : TypeToken<List<T>>() {}.type
-                gson.fromJson(json, type) ?: emptyList()
-            } catch (e: Exception) {
-                emptyList()
+            return withContext(Dispatchers.Default) {
+                try {
+                    val type = object : TypeToken<List<T>>() {}.type
+                    gson.fromJson(json, type) ?: emptyList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
             }
         }
         // Network fetch → cache → return
         val result = fetch()
-        diskCache.put(key, gson.toJson(result))
+        val json = withContext(Dispatchers.Default) { gson.toJson(result) }
+        diskCache.put(key, json)
         return result
     }
 
@@ -45,14 +53,32 @@ class IPTVRepository(
         crossinline fetch: suspend () -> T?
     ): T? {
         diskCache.get(key, ttlMs)?.let { json ->
-            return try { gson.fromJson(json, T::class.java) } catch (e: Exception) { null }
+            return withContext(Dispatchers.Default) {
+                try { gson.fromJson(json, T::class.java) } catch (e: Exception) { null }
+            }
         }
         val result = fetch() ?: return null
-        diskCache.put(key, gson.toJson(result))
+        val json = withContext(Dispatchers.Default) { gson.toJson(result) }
+        diskCache.put(key, json)
         return result
     }
 
-    // ── Category APIs ─────────────────────────────────────────────────────
+   
+ // ── Request coalescing — prevent duplicate in-flight calls ─────────────────
+ private val inFlightRequests = java.util.concurrent.ConcurrentHashMap<String, Deferred<Any>>()
+
+ @Suppress("UNCHECKED_CAST")
+ private suspend fun <T> coalesced(key: String, block: suspend () -> T): T {
+ return (inFlightRequests.getOrPut(key) {
+ coroutineScope {
+ async(Dispatchers.IO) {
+ block() as Any
+ }.also { it.invokeOnCompletion { inFlightRequests.remove(key) } }
+ }
+ } as Deferred<T>).await()
+ }
+
+ // ── Category APIs ─────────────────────────────────────────────────────
 
     suspend fun getLiveCategories(c: Credentials): List<Category> =
         cachedList("live_cats:${c.url}", DiskCache.TTL_CATEGORIES) {
@@ -107,11 +133,12 @@ class IPTVRepository(
     fun getEpisodeUrl(c: Credentials, episodeId: Int, ext: String) =
         "${c.baseUrl}/series/${c.username}/${c.password}/$episodeId.$ext"
 
-    // ── EPG (not cached — changes every ~30 min) ──────────────────────────
+ // ── EPG — 10-min TTL cache (prevents burst on rapid zapping) ──
 
     suspend fun getShortEpg(c: Credentials, streamId: Int): EpgResponse? =
-        api.getShortEpg(c.baseUrl, c.username, c.password, streamId)
-
+    cachedObject("epg_${streamId}", 10 * 60 * 1000L) {
+             api.getShortEpg(c.baseUrl, c.username, c.password, streamId)
+    }
     // ── Misc ──────────────────────────────────────────────────────────────
 
     suspend fun testConnection(c: Credentials): Boolean =

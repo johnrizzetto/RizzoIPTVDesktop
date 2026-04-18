@@ -23,8 +23,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -45,6 +50,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -60,6 +66,7 @@ import com.rizzoplayer.iptv.data.model.ChannelRef
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class PlayerActivity : ComponentActivity() {
 
@@ -85,6 +92,10 @@ class PlayerActivity : ComponentActivity() {
     private val showTrackPicker   = mutableStateOf(false)
     private val showVodControls   = mutableStateOf(false)
     private val requestOverlayFocus = mutableStateOf(false)
+
+    // Playback error
+    private val playerError = mutableStateOf<String?>(null)
+    private var onPlayerError: ((String) -> Unit)? = null
 
     // Aspect ratio
     private val resizeMode = mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT)
@@ -120,11 +131,11 @@ class PlayerActivity : ComponentActivity() {
         // Buffer config: VOD gets larger buffers for smooth playback
         val loadControl = if (isVod) {
             DefaultLoadControl.Builder()
-                .setBufferDurationsMs(5_000, 60_000, 2_500, 5_000)
+                .setBufferDurationsMs(5_000, 90_000, 2_500, 5_000)
                 .build()
         } else {
             DefaultLoadControl.Builder()
-                .setBufferDurationsMs(1_500, 8_000, 1_000, 1_500)
+                .setBufferDurationsMs(2_000, 12_000, 800, 1_200)
                 .build()
         }
 
@@ -175,6 +186,9 @@ class PlayerActivity : ComponentActivity() {
                 nextTitle        = nextTitle,
                 resizeMode       = resizeMode,
                 requestOverlayFocus = requestOverlayFocus,
+                playerError        = playerError,
+                onDismissError     = ::finish,
+                onPlayerError      = { msg -> playerError.value = msg },
                 onRetrySetup     = { retryJob = it },
                 onBack           = ::finish,
                 onSwitchChannel  = { newUrl, _ -> currentUrl = newUrl }
@@ -380,7 +394,10 @@ class PlayerActivity : ComponentActivity() {
                 val key = "${contentType}:${contentId}"
                 val positionMs = p.currentPosition
                 val durationMs = p.duration.coerceAtLeast(0)
-                (application as RizzoApp).playbackPositionStore.save(key, positionMs, durationMs)
+                lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    (application as RizzoApp).playbackPositionStore
+                        .saveAsync(key, positionMs, durationMs)
+                }
             }
             p.release()
         }
@@ -429,7 +446,10 @@ private fun PlayerScreen(
     requestOverlayFocus: MutableState<Boolean>,
     onRetrySetup: (Job?) -> Unit,
     onBack: () -> Unit,
-    onSwitchChannel: (url: String, title: String) -> Unit
+    onSwitchChannel: (url: String, title: String) -> Unit,
+    playerError: State<String?>,
+    onDismissError: () -> Unit,
+    onPlayerError: (String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val appContext = LocalContext.current.applicationContext
@@ -451,12 +471,16 @@ private fun PlayerScreen(
                 videoHeight = videoSize.height
             }
             override fun onPlayerError(error: PlaybackException) {
-                val retryJob = scope.launch {
-                    delay(3_000)
-                    player.prepare()
-                    player.play()
+                if (isVod) {
+                    onPlayerError?.invoke(error.message ?: "Playback failed")
+                } else {
+                    val retryJob = scope.launch {
+                        delay(3_000)
+                        player.prepare()
+                        player.play()
+                    }
+                    onRetrySetup(retryJob)
                 }
-                onRetrySetup(retryJob)
             }
         }
         player.addListener(listener)
@@ -473,29 +497,48 @@ private fun PlayerScreen(
     }
 
     // Track selector state
-    val audioTracks = remember { mutableStateListOf<Pair<String, Int>>() }
-    val textTracks  = remember { mutableStateListOf<Pair<String, Int>>() }
+    // Track selector state — store the actual group index so we can query it for selection checks
+    val audioTracks = remember { mutableStateListOf<Pair<String, Int>>() } // label, groupIndex
+    val textTracks  = remember { mutableStateListOf<Pair<String, Int>>() } // label, groupIndex
+
+    // Currently selected group indices (null = off / not selected)
+    var selectedAudioGroupIdx by remember { mutableStateOf<Int?>(null) }
+    var selectedTextGroupIdx by remember { mutableStateOf<Int?>(null) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
-            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+            override fun onTracksChanged(tracks: Tracks) {
                 audioTracks.clear()
                 textTracks.clear()
+                selectedAudioGroupIdx = null
+                selectedTextGroupIdx = null
                 tracks.groups.forEachIndexed { groupIdx, group ->
                     when (group.type) {
                         C.TRACK_TYPE_AUDIO -> {
                             for (i in 0 until group.length) {
                                 val fmt = group.getTrackFormat(i)
                                 val lang = fmt.language ?: "Audio ${groupIdx + 1}"
-                                val label = "${lang.uppercase()} ${if (fmt.channelCount > 0) "· ${fmt.channelCount}ch" else ""}".trim()
+                                val displayLang = try {
+                                    Locale.forLanguageTag(lang).displayLanguage.let {
+                                        if (it.isNotBlank()) it.uppercase() else lang.uppercase()
+                                    }
+                                } catch (_: Exception) { lang.uppercase() }
+                                val label = "${displayLang}${if (fmt.channelCount > 0) " · ${fmt.channelCount}ch" else ""}".trim()
                                 audioTracks.add(label to groupIdx)
+                                if (group.isTrackSelected(i)) selectedAudioGroupIdx = groupIdx
                             }
                         }
                         C.TRACK_TYPE_TEXT -> {
                             for (i in 0 until group.length) {
                                 val fmt = group.getTrackFormat(i)
                                 val lang = fmt.language ?: "Sub ${groupIdx + 1}"
-                                textTracks.add(lang.uppercase() to groupIdx)
+                                val displayLang = try {
+                                    Locale.forLanguageTag(lang).displayLanguage.let {
+                                        if (it.isNotBlank()) it.uppercase() else lang.uppercase()
+                                    }
+                                } catch (_: Exception) { lang.uppercase() }
+                                textTracks.add(displayLang.uppercase() to groupIdx)
+                                if (group.isTrackSelected(i)) selectedTextGroupIdx = groupIdx
                             }
                         }
                     }
@@ -643,46 +686,58 @@ private fun PlayerScreen(
                     if (audioTracks.isNotEmpty()) {
                         Text("AUDIO", color = Color(0xFF4D8EFF), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         audioTracks.forEach { (label, groupIdx) ->
-                            TrackRow(label = label) {
-                                val group = player.currentTracks.groups.getOrNull(groupIdx) ?: return@TrackRow
-                                player.trackSelectionParameters = player.trackSelectionParameters
-                                    .buildUpon()
-                                    .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
-                                    .build()
-                            }
+                            TrackRow(
+                                label = label,
+                                isSelected = selectedAudioGroupIdx == groupIdx,
+                                onSelect = {
+                                    val group = player.currentTracks.groups.getOrNull(groupIdx) ?: return@TrackRow
+                                    player.trackSelectionParameters = player.trackSelectionParameters
+                                        .buildUpon()
+                                        .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+                                        .build()
+                                }
+                            )
                         }
                     }
 
                     if (textTracks.isNotEmpty()) {
                         Spacer(Modifier.height(4.dp))
                         Text("SUBTITLES", color = Color(0xFF4D8EFF), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        TrackRow(label = "Off") {
-                            player.trackSelectionParameters = player.trackSelectionParameters
-                                .buildUpon()
-                                .setIgnoredTextSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                                .build()
-                        }
-                        textTracks.forEach { (label, groupIdx) ->
-                            TrackRow(label = label) {
-                                val group = player.currentTracks.groups.getOrNull(groupIdx) ?: return@TrackRow
+                        TrackRow(
+                            label = "Off",
+                            isSelected = selectedTextGroupIdx == null,
+                            onSelect = {
                                 player.trackSelectionParameters = player.trackSelectionParameters
                                     .buildUpon()
-                                    .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+                                    .setIgnoredTextSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                                     .build()
                             }
+                        )
+                        textTracks.forEach { (label, groupIdx) ->
+                            TrackRow(
+                                label = label,
+                                isSelected = selectedTextGroupIdx == groupIdx,
+                                onSelect = {
+                                    val group = player.currentTracks.groups.getOrNull(groupIdx) ?: return@TrackRow
+                                    player.trackSelectionParameters = player.trackSelectionParameters
+                                        .buildUpon()
+                                        .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+                                        .build()
+                                }
+                            )
                         }
                     }
 
                     // ── Aspect ratio / video section ──────────────────────
                     Spacer(Modifier.height(4.dp))
                     Text("VIDEO", color = Color(0xFF4D8EFF), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    TrackRow(label = "Fit") {
+                    TrackRow(label = "Fit", isSelected = resizeMode.intValue == AspectRatioFrameLayout.RESIZE_MODE_FIT) {
                         resizeMode.intValue = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     }
-                    TrackRow(label = "Zoom") {
+                    TrackRow(label = "Zoom", isSelected = resizeMode.intValue == AspectRatioFrameLayout.RESIZE_MODE_ZOOM) {
                         resizeMode.intValue = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                     }
-                    TrackRow(label = "Stretch") {
+                    TrackRow(label = "Stretch", isSelected = resizeMode.intValue == AspectRatioFrameLayout.RESIZE_MODE_FILL) {
                         resizeMode.intValue = AspectRatioFrameLayout.RESIZE_MODE_FILL
                     }
 
@@ -727,6 +782,52 @@ private fun PlayerScreen(
                         "Press BACK to cancel",
                         color = Color.White.copy(alpha = 0.45f),
                         fontSize = 12.sp
+                    )
+                }
+            }
+        }
+
+        // ── Playback error overlay ────────────────────────────────────────
+        val errMsg = playerError.value
+        if (errMsg != null) {
+            val errBtnFocus = remember { FocusRequester() }
+            LaunchedEffect(errMsg) { try { errBtnFocus.requestFocus() } catch (_: Exception) {} }
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "Playback Error",
+                        color = Color(0xFFEF4444),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        errMsg,
+                        color = Color.LightGray,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .widthIn(max = 480.dp)
+                            .padding(horizontal = 24.dp)
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    var btnFocused by remember { mutableStateOf(false) }
+                    Text(
+                        "Go Back",
+                        color = if (btnFocused) Color(0xFF00CFFF) else Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF1A1A40))
+                            .onFocusChanged { btnFocused = it.isFocused }
+                            .focusRequester(errBtnFocus)
+                            .focusable()
+                            .clickable(onClick = onDismissError)
+                            .padding(horizontal = 28.dp, vertical = 12.dp)
                     )
                 }
             }
@@ -932,7 +1033,7 @@ private fun QuickSwitchOverlay(
                     QuickSwitchCard(
                         channel = channel,
                         onClick = { onSwitchChannel(channel.url, channel.name) },
-                        modifier = if (isFirst && !hasFavs.not()) Modifier.focusRequester(firstCardFocus) else Modifier
+                        modifier = if (isFirst) Modifier.focusRequester(firstCardFocus) else Modifier
                     )
                 }
             }
@@ -978,19 +1079,28 @@ private fun QuickSwitchCard(
     modifier: Modifier = Modifier
 ) {
     var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (focused) 1.08f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioNoBouncy),
+        label = "cardScale"
+    )
     Row(
         modifier = modifier
+            .scale(scale)
             .clip(RoundedCornerShape(8.dp))
-            .background(if (focused) Color(0xFF00CFFF) else Color(0x44222222))
+            .background(
+                if (focused) Color(0xFF00CFFF).copy(alpha = 0.22f)
+                else Color(0xFF141428)
+            )
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Color.White else Color.White.copy(alpha = 0.08f),
+                color = if (focused) Color(0xFF00CFFF) else Color.White.copy(alpha = 0.18f),
                 shape = RoundedCornerShape(8.dp)
             )
-            .clickable(onClick = onClick)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -1008,19 +1118,20 @@ private fun QuickSwitchCard(
             Box(
                 Modifier
                     .size(28.dp)
-                    .background(if (focused) Color.White.copy(alpha = 0.3f) else Color(0xFF00CFFF).copy(alpha = 0.25f), RoundedCornerShape(4.dp)),
+                    .background(Color(0xFF00CFFF).copy(alpha = if (focused) 0.35f else 0.18f), RoundedCornerShape(4.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     channel.name.firstOrNull { it.isLetter() }?.uppercase() ?: "?",
-                    color = if (focused) Color.Black else Color(0xFF00CFFF),
-                    fontSize = 12.sp, fontWeight = FontWeight.Bold
+                    color = Color(0xFF00CFFF),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
         Text(
             channel.name,
-            color = if (focused) Color.Black else Color.White.copy(alpha = 0.7f),
+            color = if (focused) Color.White else Color.White.copy(alpha = 0.65f),
             fontSize = 12.sp,
             fontWeight = if (focused) FontWeight.Bold else FontWeight.Normal,
             maxLines = 1,
@@ -1031,18 +1142,45 @@ private fun QuickSwitchCard(
 }
 
 @Composable
-private fun TrackRow(label: String, onSelect: () -> Unit) {
+private fun TrackRow(label: String, isSelected: Boolean, onSelect: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
+    val isActive = focused || isSelected
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(if (focused) Color(0xFF162040) else Color.Transparent)
+            .background(
+                when {
+                    isActive && isSelected -> Color(0xFF00CFFF).copy(alpha = 0.2f)
+                    isActive -> Color(0xFF162040)
+                    else -> Color.Transparent
+                }
+            )
+            .then(
+                if (isActive) Modifier.border(
+                    if (isSelected) 1.5.dp else 1.dp,
+                    if (isSelected) Color(0xFF00CFFF) else Color(0xFF4D8EFF).copy(alpha = 0.5f),
+                    RoundedCornerShape(8.dp)
+                ) else Modifier
+            )
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickable(onClick = onSelect)
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
-        Text(label, color = if (focused) Color.White else Color.White.copy(alpha = 0.75f), fontSize = 15.sp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                label,
+                color = if (isActive) Color.White else Color.White.copy(alpha = 0.6f),
+                fontSize = 15.sp
+            )
+            if (isSelected) {
+                Text("✓", color = Color(0xFF00CFFF), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }

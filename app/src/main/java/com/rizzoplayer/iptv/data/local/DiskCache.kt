@@ -5,18 +5,20 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import android.util.LruCache
+
 /**
  * Two-level API cache: memory (instant) + disk (survives app restarts).
  *
  * Each entry is stored as a JSON file named by the hash of its key.
  * TTL is enforced via file last-modified timestamp.
  */
-class DiskCache(context: Context) {
+class DiskCache(context: Context, dirName: String = "iptv_api") {
 
-    private val dir = File(context.cacheDir, "iptv_api").also { it.mkdirs() }
+    private val dir = File(context.cacheDir, dirName).also { it.mkdirs() }
 
-    // In-memory layer on top — avoids disk reads on hot paths
-    private val mem = HashMap<String, Pair<String, Long>>() // key → (json, storedAt)
+    // In-memory layer on top — bounded to 50 items to avoid OOM
+    private val mem = LruCache<String, Pair<String, Long>>(50) // key → (json, storedAt)
 
     companion object {
         val TTL_CATEGORIES = 24 * 60 * 60 * 1000L   // 24 h — categories rarely change
@@ -32,7 +34,7 @@ class DiskCache(context: Context) {
         val now = System.currentTimeMillis()
 
         // 1. Memory hit
-        mem[key]?.let { (json, storedAt) ->
+        mem.get(key)?.let { (json, storedAt) ->
             if (now - storedAt <= ttlMs) return json
             mem.remove(key)
         }
@@ -44,14 +46,14 @@ class DiskCache(context: Context) {
             file.delete()
             return null
         }
-        return runCatching { file.readText().also { mem[key] = it to file.lastModified() } }
+        return runCatching { file.readText().also { mem.put(key, it to file.lastModified()) } }
             .getOrNull()
     }
 
     /** Stores [json] to memory immediately and writes to disk on IO dispatcher. */
     suspend fun put(key: String, json: String) {
         val now = System.currentTimeMillis()
-        synchronized(this) { mem[key] = json to now }
+        synchronized(this) { mem.put(key, json to now) }
         withContext(Dispatchers.IO) {
             runCatching { file(key).writeText(json) }
         }
@@ -60,7 +62,7 @@ class DiskCache(context: Context) {
     /** Wipes all cached entries. */
     @Synchronized
     fun clear() {
-        mem.clear()
+        mem.evictAll()
         dir.listFiles()?.forEach { it.delete() }
     }
 

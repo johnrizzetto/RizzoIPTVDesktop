@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,6 +15,11 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
+
+        val localProps = Properties()
+        rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { localProps.load(it) }
+        buildConfigField("String", "TMDB_BEARER", "\"${localProps.getProperty("TMDB_BEARER", "")}\"")
+        buildConfigField("String", "TORBOX_API_KEY", "\"${localProps.getProperty("TORBOX_API_KEY", "")}\"")
     }
 
     buildTypes {
@@ -37,6 +44,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

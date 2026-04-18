@@ -1,23 +1,33 @@
 package com.rizzoplayer.iptv.data.api
 
+import android.content.Context
 import android.util.Base64
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.rizzoplayer.iptv.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Cache
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
+import java.io.File
 import java.util.concurrent.TimeUnit
 
-class IPTVApiService {
+class IPTVApiService(context: Context? = null) {
 
     private val client = OkHttpClient.Builder()
+        .apply {
+            if (context != null) {
+                cache(Cache(File(context.cacheDir, "okhttp_cache"), 10L * 1024 * 1024))
+            }
+        }
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
-        .connectionPool(ConnectionPool(20, 5, TimeUnit.MINUTES))
+        .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
+        .connectionPool(ConnectionPool(10, 2, TimeUnit.MINUTES))
         .dispatcher(Dispatcher().apply {
             maxRequests = 32
             maxRequestsPerHost = 16

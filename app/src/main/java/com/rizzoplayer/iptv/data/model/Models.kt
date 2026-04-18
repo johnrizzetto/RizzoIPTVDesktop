@@ -2,6 +2,10 @@ package com.rizzoplayer.iptv.data.model
 
 import com.google.gson.annotations.SerializedName
 
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.Immutable
+
+@Stable
 data class Credentials(
     val url: String,
     val username: String,
@@ -21,18 +25,21 @@ data class ServerConfig(
     fun toCredentials() = Credentials(url = url, username = username, password = password)
 }
 
+@Immutable
 data class ChannelRef(
     val name: String,
     val url: String,
     val icon: String? = null
 )
 
+@Immutable
 data class Category(
     @SerializedName("category_id") val id: String,
     @SerializedName("category_name") val name: String,
     @SerializedName("parent_id") val parentId: Int = 0
 )
 
+@Immutable
 data class LiveStream(
     @SerializedName("stream_id") val id: Int,
     @SerializedName("name") val name: String,
@@ -40,6 +47,7 @@ data class LiveStream(
     @SerializedName("stream_icon") val icon: String? = null
 )
 
+@Immutable
 data class VodStream(
     @SerializedName("stream_id") val id: Int,
     @SerializedName("name") val name: String,
@@ -48,6 +56,7 @@ data class VodStream(
     @SerializedName("container_extension") val containerExtension: String = "mp4"
 )
 
+@Immutable
 data class Series(
     @SerializedName("series_id") val id: Int,
     @SerializedName("name") val name: String,
@@ -59,6 +68,7 @@ data class SeriesInfo(
     @SerializedName("episodes") val episodes: Map<String, List<Episode>>? = null
 )
 
+@Immutable
 data class Episode(
     @SerializedName("id") val id: Int,
     @SerializedName("title") val title: String? = null,
@@ -79,12 +89,14 @@ data class EpgResponse(
     @SerializedName("epg_listings") val listings: List<EpgListing>? = null
 )
 
+@Immutable
 data class EpgListing(
     @SerializedName("title") val title: String = "",
     @SerializedName("start") val start: String = "",
     @SerializedName("end") val end: String = ""
 )
 
+@Immutable
 data class Favorite(
     val id: String,
     val name: String,
@@ -94,6 +106,7 @@ data class Favorite(
     val addedAt: String = ""
 )
 
+@Immutable
 data class RecentItem(
     val id: String,
     val name: String,
@@ -113,5 +126,6 @@ data class PlayEvent(
     val favoriteChannels: List<ChannelRef> = emptyList(),
     val resumeMs: Long = 0,
     val nextUrl: String = "",           // next episode URL for auto-advance
-    val nextTitle: String = ""          // next episode title
+    val nextTitle: String = "",          // next episode title
+    val contentId: String = ""          // stable ID for position tracking
 )

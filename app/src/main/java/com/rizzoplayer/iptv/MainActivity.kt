@@ -38,8 +38,17 @@ class MainActivity : ComponentActivity() {
             recentlyWatchedStore  = RecentlyWatchedStore(applicationContext),
             diskCache             = DiskCache(applicationContext)
         )
+        val tmdbRepository = com.rizzoplayer.iptv.data.repository.TmdbRepository(
+            tmdb = com.rizzoplayer.iptv.data.api.TmdbApiService(),
+            torrentio = com.rizzoplayer.iptv.data.api.TorrentioService(),
+            diskCache = DiskCache(applicationContext, "tmdb_api")
+        )
+        val torBoxRepository = com.rizzoplayer.iptv.data.repository.TorBoxRepository(
+            torBox = com.rizzoplayer.iptv.data.api.TorBoxApiService(),
+            torrentio = com.rizzoplayer.iptv.data.api.TorrentioService()
+        )
         val serversStore = ServersStore(applicationContext)
-        val factory = ViewModelFactory(repository, serversStore, app.preferencesStore)
+        val factory = ViewModelFactory(repository, tmdbRepository, torBoxRepository, serversStore, app.preferencesStore, app)
 
         setContent {
             RizzoIPTVTheme {
@@ -79,7 +88,11 @@ class MainActivity : ComponentActivity() {
                         mainVm.playEvent.collect { event ->
                             val positionStore = app.playbackPositionStore
                             // Build content key for position lookup
-                            val contentId = event.url.substringAfterLast("/").substringBefore(".")
+                            val contentId = if (event.contentType.startsWith("tmdb_")) {
+                                event.contentId
+                            } else {
+                                event.url.substringAfterLast("/").substringBefore(".")
+                            }
                             val posKey = "${event.contentType}:$contentId"
                             val resumeMs = positionStore.getPosition(posKey)
                             val recentJson = if (event.recentChannels.isNotEmpty())
