@@ -205,7 +205,7 @@ fun TmdbMovieGrid(
 
     LazyVerticalGrid(
         state = listState,
-        columns = GridCells.Adaptive(140.dp),
+        columns = GridCells.Adaptive(120.dp),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -244,7 +244,9 @@ fun TmdbPosterCard(
     onFocusChanged: (Boolean) -> Unit,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    cardWidth: androidx.compose.ui.unit.Dp = 120.dp,
+    posterHeight: androidx.compose.ui.unit.Dp = 180.dp
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isCardFocused by interactionSource.collectIsFocusedAsState()
@@ -253,7 +255,7 @@ fun TmdbPosterCard(
     Box(modifier = modifier.fillMaxWidth()) {
         Card(
             modifier = Modifier
-                .width(140.dp)
+                .width(cardWidth)
                 .align(Alignment.TopCenter)
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .focusable(interactionSource = interactionSource)
@@ -281,10 +283,10 @@ fun TmdbPosterCard(
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(210.dp)
+                                .height(posterHeight)
                         )
                     } else {
-                        PosterFallback(title)
+                        PosterFallback(title, posterHeight)
                     }
                     if (rating > 0) {
                         Box(
@@ -352,11 +354,11 @@ fun TmdbPosterCard(
 }
 
 @Composable
-private fun PosterFallback(title: String) {
+private fun PosterFallback(title: String, height: androidx.compose.ui.unit.Dp = 210.dp) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(210.dp)
+            .height(height)
             .clip(RoundedCornerShape(8.dp))
             .background(CardBg),
         contentAlignment = Alignment.Center
