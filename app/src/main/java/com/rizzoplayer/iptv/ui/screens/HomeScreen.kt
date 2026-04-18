@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -20,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -62,6 +64,7 @@ fun HomeScreen(viewModel: MainViewModel) {
         label = "sidebar",
     )
     val navFocusRequesters = remember { NAV_ENTRIES.map { FocusRequester() } }
+    val contentFocusRestorer = remember { FocusRequester() }
 
     LaunchedEffect(sidebarExpanded) {
         if (sidebarExpanded) {
@@ -86,6 +89,7 @@ fun HomeScreen(viewModel: MainViewModel) {
             onSelect = { viewModel.selectSection(it) },
             onBack = viewModel::goBack,
             onLogout = viewModel::logout,
+            contentFocusRestorer = contentFocusRestorer,
         )
 
         Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -105,7 +109,8 @@ fun HomeScreen(viewModel: MainViewModel) {
             SearchBar(
                 query = state.searchQuery,
                 onQueryChange = viewModel::setSearchQuery,
-                onClear = { viewModel.setSearchQuery("") }
+                onClear = { viewModel.setSearchQuery("") },
+                downTarget = contentFocusRestorer
             )
 
             // EPG — minimal one-liner for live TV
@@ -123,7 +128,15 @@ fun HomeScreen(viewModel: MainViewModel) {
             }
 
             // Content
-            Box(Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .focusGroup()
+                    .focusProperties {
+                        left = navFocusRequesters.lastOrNull() ?: FocusRequester.Default
+                    }
+                    .focusable()
+            ) {
                 when {
                     state.isLoading -> LoadingView()
                     state.error != null -> ErrorView(
@@ -241,6 +254,9 @@ fun LoadingView() {
 
 @Composable
 fun ErrorView(message: String, onDismiss: () -> Unit, onReload: () -> Unit) {
+    val retryFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { retryFocus.requestFocus() }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.Center,
@@ -255,14 +271,19 @@ fun ErrorView(message: String, onDismiss: () -> Unit, onReload: () -> Unit) {
                 "Dismiss",
                 fontSize = 13.sp,
                 color = TextMuted,
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onDismiss).padding(8.dp)
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).focusable().clickable(onClick = onDismiss).padding(8.dp)
             )
             Text(
                 "Retry",
                 fontSize = 13.sp,
                 color = AccentBlue,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onReload).padding(8.dp)
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .focusRequester(retryFocus)
+                    .focusable()
+                    .clickable(onClick = onReload)
+                    .padding(8.dp)
             )
         }
     }

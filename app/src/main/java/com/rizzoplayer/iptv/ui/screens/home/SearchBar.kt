@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
@@ -29,7 +30,8 @@ fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     onClear: () -> Unit,
-    focusRequester: FocusRequester = remember { FocusRequester() }
+    focusRequester: FocusRequester = remember { FocusRequester() },
+    downTarget: FocusRequester? = null
 ) {
     var focused by remember { mutableStateOf(false) }
     Row(
@@ -45,6 +47,11 @@ fun SearchBar(
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .focusRequester(focusRequester)
+            .then(
+                if (downTarget != null) {
+                    Modifier.focusProperties { this.down = downTarget }
+                } else Modifier
+            )
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

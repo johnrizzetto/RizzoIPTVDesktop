@@ -50,6 +50,7 @@ fun Sidebar(
     onSelect: (Section) -> Unit,
     onBack: () -> Unit,
     onLogout: () -> Unit,
+    contentFocusRestorer: FocusRequester,
 ) {
     var showLogoutDialog by remember { mutableStateOf(false) }
 
@@ -93,9 +94,10 @@ fun Sidebar(
                 label = entry.label,
                 active = currentSection == entry.section,
                 expanded = expanded,
-                fr =navFocusRequesters[idx],
+                fr = navFocusRequesters[idx],
                 upTarget = upTarget,
                 downTarget = downTarget,
+                rightTarget = contentFocusRestorer,
                 onClick = { onSelect(entry.section) },
             )
             Spacer(Modifier.height(2.dp))
@@ -108,6 +110,7 @@ fun Sidebar(
                 label = "Back",
                 active = false,
                 expanded = expanded,
+                rightTarget = contentFocusRestorer,
                 onClick = onBack,
             )
         }
@@ -121,9 +124,10 @@ fun Sidebar(
             active = false,
             expanded = expanded,
             danger = true,
-            fr =signOutFocusRequester,
+            fr = signOutFocusRequester,
             upTarget = navFocusRequesters.last(),
             downTarget = navFocusRequesters.first(),
+            rightTarget = contentFocusRestorer,
             onClick = { showLogoutDialog = true },
         )
     }
@@ -140,6 +144,7 @@ private fun SidebarNavItem(
     danger: Boolean = false,
     upTarget: FocusRequester? = null,
     downTarget: FocusRequester? = null,
+    rightTarget: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -185,10 +190,11 @@ private fun SidebarNavItem(
             )
             .onFocusChanged { focused = it.isFocused }
             .then(
-                if (upTarget != null || downTarget != null) {
+                if (upTarget != null || downTarget != null || rightTarget != null) {
                     Modifier.focusProperties {
                         if (upTarget != null) up = upTarget
                         if (downTarget != null) down = downTarget
+                        if (rightTarget != null) right = rightTarget
                     }
                 } else Modifier
             )
