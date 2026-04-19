@@ -37,6 +37,7 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.rizzoplayer.iptv.AppConfig
 import com.rizzoplayer.iptv.data.model.Favorite
+import com.rizzoplayer.iptv.data.model.RecentItem
 import com.rizzoplayer.iptv.data.model.TmdbEpisode
 import com.rizzoplayer.iptv.data.model.TmdbSeason
 import com.rizzoplayer.iptv.data.model.TmdbShow
@@ -47,8 +48,10 @@ import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
 fun SeriesHome(
     content: BrowseContent.TmdbShows,
     favorites: Map<String, Favorite>,
+    continueWatchingItems: List<RecentItem> = emptyList(),
     onSelectShow: (TmdbShow) -> Unit,
-    onToggleFavorite: (TmdbShow) -> Unit
+    onToggleFavorite: (TmdbShow) -> Unit,
+    onPlayRecent: ((RecentItem) -> Unit)? = null
 ) {
     val hero = content.items.firstOrNull()
     val heroBackdrop = hero?.backdropPath?.let {
@@ -59,6 +62,13 @@ fun SeriesHome(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        val filteredContinueWatching = continueWatchingItems.filter { it.type == "series" || it.type == "episode" }
+        if (filteredContinueWatching.isNotEmpty() && onPlayRecent != null) {
+            ContinueWatchingStrip(
+                items = filteredContinueWatching,
+                onPlay = onPlayRecent
+            )
+        }
         // Hero backdrop
         if (heroBackdrop != null && hero != null) {
             Box(
@@ -199,7 +209,7 @@ fun TmdbShowGrid(
 
     LazyVerticalGrid(
         state = listState,
-        columns = GridCells.Adaptive(140.dp),
+        columns = GridCells.Adaptive(120.dp),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -218,7 +228,9 @@ fun TmdbShowGrid(
                 isFavorite = favorites.containsKey(show.id.toString()),
                 onFocusChanged = { focused = it },
                 onClick = { onSelectShow(show) },
-                onLongClick = { onToggleFavorite(show) }
+                onLongClick = { onToggleFavorite(show) },
+                cardWidth = 120.dp,
+                posterHeight = 180.dp
             )
         }
     }

@@ -61,6 +61,7 @@ fun ContentArea(
     val q = searchQuery.trim().lowercase()
     val listState = rememberLazyListState()
     val restoreIndex = viewModel.state.collectAsState().value.restoreScrollIndex
+    val continueWatching by viewModel.continueWatching.collectAsState()
 
     LaunchedEffect(restoreIndex) {
         if (restoreIndex >= 0) {
@@ -123,6 +124,7 @@ fun ContentArea(
             MoviesHome(
                 content = content,
                 favorites = favorites,
+                continueWatchingItems = continueWatching,
                 onSelectMovie = viewModel::selectTmdbMovie,
                 onToggleFavorite = { movie ->
                     viewModel.toggleFavorite(
@@ -131,7 +133,8 @@ fun ContentArea(
                         type = "tmdb_movie",
                         icon = movie.posterPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}$it" }
                     )
-                }
+                },
+                onPlayRecent = viewModel::onPlayRecent
             )
         }
 
@@ -155,6 +158,7 @@ fun ContentArea(
             SeriesHome(
                 content = content,
                 favorites = favorites,
+                continueWatchingItems = continueWatching,
                 onSelectShow = viewModel::selectTmdbShow,
                 onToggleFavorite = { show ->
                     viewModel.toggleFavorite(
@@ -163,7 +167,8 @@ fun ContentArea(
                         type = "tmdb_show",
                         icon = show.posterPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}$it" }
                     )
-                }
+                },
+                onPlayRecent = viewModel::onPlayRecent
             )
         }
 

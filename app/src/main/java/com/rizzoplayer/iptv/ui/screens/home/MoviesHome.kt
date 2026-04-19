@@ -42,6 +42,7 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.rizzoplayer.iptv.AppConfig
 import com.rizzoplayer.iptv.data.model.Favorite
+import com.rizzoplayer.iptv.data.model.RecentItem
 import com.rizzoplayer.iptv.data.model.TmdbMovie
 import com.rizzoplayer.iptv.ui.theme.*
 import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
@@ -51,8 +52,10 @@ import androidx.compose.animation.core.animateFloatAsState
 fun MoviesHome(
     content: BrowseContent.TmdbMovies,
     favorites: Map<String, Favorite>,
+    continueWatchingItems: List<RecentItem> = emptyList(),
     onSelectMovie: (TmdbMovie) -> Unit,
-    onToggleFavorite: (TmdbMovie) -> Unit
+    onToggleFavorite: (TmdbMovie) -> Unit,
+    onPlayRecent: ((RecentItem) -> Unit)? = null
 ) {
     val hero = content.items.firstOrNull()
     val heroBackdrop = hero?.backdropPath?.let {
@@ -63,6 +66,13 @@ fun MoviesHome(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        val filteredContinueWatching = continueWatchingItems.filter { it.type == "vod" || it.type == "tmdb_movie" }
+        if (filteredContinueWatching.isNotEmpty() && onPlayRecent != null) {
+            ContinueWatchingStrip(
+                items = filteredContinueWatching,
+                onPlay = onPlayRecent
+            )
+        }
         // Hero backdrop
         if (heroBackdrop != null && hero != null) {
             Box(
