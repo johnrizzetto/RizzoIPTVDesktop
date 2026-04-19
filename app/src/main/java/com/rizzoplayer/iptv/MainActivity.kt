@@ -9,6 +9,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.gson.Gson
 import com.rizzoplayer.iptv.data.local.CredentialsStore
 import com.rizzoplayer.iptv.data.local.DiskCache
+import com.rizzoplayer.iptv.data.model.Favorite
+import com.rizzoplayer.iptv.data.model.PlayEvent
 import com.rizzoplayer.iptv.data.local.FavoritesStore
 import com.rizzoplayer.iptv.data.local.RecentlyWatchedStore
 import com.rizzoplayer.iptv.data.local.ServersStore
@@ -26,6 +28,20 @@ import kotlinx.coroutines.flow.first
 class MainActivity : ComponentActivity() {
 
     private val gson = Gson()
+    private var pendingPlayEvent: PlayEvent? = null
+    private var mainVm: MainViewModel? = null
+
+    companion object {
+        private const val REQUEST_PLAY = 100
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_PLAY && resultCode == PlayerActivity.RESULT_PLAYBACK_ERROR) {
+            pendingPlayEvent = null
+            mainVm?.onPlaybackError()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +84,7 @@ class MainActivity : ComponentActivity() {
                     )
                 } else {
                     val mainVm: MainViewModel = viewModel(factory = factory)
+                    this.mainVm = mainVm
 
                     // Restore last section on first load
                     LaunchedEffect(Unit) {
@@ -99,7 +116,8 @@ class MainActivity : ComponentActivity() {
                                 gson.toJson(event.recentChannels) else ""
                             val favJson = if (event.favoriteChannels.isNotEmpty())
                                 gson.toJson(event.favoriteChannels) else ""
-                            startActivity(
+                            pendingPlayEvent = event
+                            startActivityForResult(
                                 Intent(this@MainActivity, PlayerActivity::class.java).apply {
                                     putExtra(PlayerActivity.EXTRA_URL, event.url)
                                     putExtra(PlayerActivity.EXTRA_TITLE, event.title)
@@ -110,7 +128,8 @@ class MainActivity : ComponentActivity() {
                                     putExtra(PlayerActivity.EXTRA_FAVORITE_CHANNELS, favJson)
                                     putExtra(PlayerActivity.EXTRA_NEXT_URL, event.nextUrl)
                                     putExtra(PlayerActivity.EXTRA_NEXT_TITLE, event.nextTitle)
-                                }
+                                },
+                                REQUEST_PLAY
                             )
                         }
                     }
