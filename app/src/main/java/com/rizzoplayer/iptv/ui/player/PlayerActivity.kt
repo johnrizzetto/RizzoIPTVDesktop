@@ -15,8 +15,10 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -63,10 +65,16 @@ import com.google.gson.reflect.TypeToken
 import com.rizzoplayer.iptv.RizzoApp
 import com.rizzoplayer.iptv.data.local.PlaybackPositionStore
 import com.rizzoplayer.iptv.data.model.ChannelRef
+import com.rizzoplayer.iptv.ui.theme.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
+
+private sealed interface TrackItem {
+    data class Audio(val label: String, val groupIndex: Int) : TrackItem
+    data class Text(val label: String, val groupIndex: Int, val isOff: Boolean = false) : TrackItem
+}
 
 class PlayerActivity : ComponentActivity() {
 
@@ -89,7 +97,7 @@ class PlayerActivity : ComponentActivity() {
     // Overlay state
     private val showResolution    = mutableStateOf(false)
     private val showRecentBar     = mutableStateOf(false)
-    private val showTrackPicker   = mutableStateOf(false)
+    private val showTrackPicker: MutableState<Boolean> = mutableStateOf(false)
     private val showVodControls   = mutableStateOf(false)
     private val requestOverlayFocus = mutableStateOf(false)
 
@@ -131,11 +139,11 @@ class PlayerActivity : ComponentActivity() {
         // Buffer config: VOD gets larger buffers for smooth playback
         val loadControl = if (isVod) {
             DefaultLoadControl.Builder()
-                .setBufferDurationsMs(5_000, 90_000, 2_500, 5_000)
+                .setBufferDurationsMs(15_000, 90_000, 5_000, 10_000)
                 .build()
         } else {
             DefaultLoadControl.Builder()
-                .setBufferDurationsMs(2_000, 12_000, 800, 1_200)
+                .setBufferDurationsMs(1_500, 12_000, 1_000, 2_000)
                 .build()
         }
 
@@ -144,7 +152,11 @@ class PlayerActivity : ComponentActivity() {
             .build().apply {
                 setMediaItem(MediaItem.fromUri(currentUrl))
                 prepare()
-                if (resumeMs > 30_000L) seekTo(resumeMs)
+                if (resumeMs > 60_000L) {
+                    // Let resume dialog choose position; don't auto-seek here
+                } else if (resumeMs > 0L) {
+                    seekTo(resumeMs)
+                }
                 playWhenReady = true
 
                 // Episode auto-advance listener
@@ -191,6 +203,7 @@ class PlayerActivity : ComponentActivity() {
                 onPlayerError      = { msg -> playerError.value = msg },
                 onRetrySetup     = { retryJob = it },
                 onBack           = ::finish,
+                onVodPlaybackError = ::onVodPlaybackError,
                 onSwitchChannel  = { newUrl, _ -> currentUrl = newUrl }
             )
         }
@@ -207,6 +220,11 @@ class PlayerActivity : ComponentActivity() {
         p.setMediaItem(MediaItem.fromUri(url))
         p.prepare()
         p.play()
+    }
+
+    private fun onVodPlaybackError() {
+        setResult(RESULT_PLAYBACK_ERROR)
+        finish()
     }
 
     private fun parseChannelRefs(json: String): List<ChannelRef> {
@@ -236,17 +254,37 @@ class PlayerActivity : ComponentActivity() {
 
     private fun handleVodKey(event: KeyEvent): Boolean {
         val p = player ?: return super.dispatchKeyEvent(event)
+
+        // ── When track picker is open: LEFT/RIGHT seek, BACK closes, all else goes to Compose ──
+        if (showTrackPicker.value) {
+            return when (event.keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    showTrackPicker.value = false
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    val seekMs = if (event.repeatCount > 0) 30_000L else 10_000L
+                    p.seekTo((p.currentPosition - seekMs).coerceAtLeast(0))
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    val seekMs = if (event.repeatCount > 0) 30_000L else 10_000L
+                    p.seekTo(p.currentPosition + seekMs)
+                    true
+                }
+                else -> super.dispatchKeyEvent(event)
+            }
+        }
+
         when (event.keyCode) {
             // Play / Pause
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                if (showTrackPicker.value) return super.dispatchKeyEvent(event)
                 if (p.isPlaying) p.pause() else p.play()
                 showVodControlsBriefly()
                 return true
             }
             // Rewind: 10 s on first press, 30 s when held
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (showTrackPicker.value) return super.dispatchKeyEvent(event)
                 val seekMs = if (event.repeatCount > 0) 30_000L else 10_000L
                 p.seekTo((p.currentPosition - seekMs).coerceAtLeast(0))
                 showVodControlsBriefly()
@@ -254,7 +292,6 @@ class PlayerActivity : ComponentActivity() {
             }
             // Forward: 10 s on first press, 30 s when held
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (showTrackPicker.value) return super.dispatchKeyEvent(event)
                 val seekMs = if (event.repeatCount > 0) 30_000L else 10_000L
                 p.seekTo(p.currentPosition + seekMs)
                 showVodControlsBriefly()
@@ -277,6 +314,23 @@ class PlayerActivity : ComponentActivity() {
             // Audio/Subtitle picker
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CAPTIONS, KeyEvent.KEYCODE_MENU -> {
                 showTrackPicker.value = !showTrackPicker.value
+                return true
+            }
+            // Keyboard: 1 = seek back 10s, 3 = seek forward 10s
+            KeyEvent.KEYCODE_1 -> {
+                p.seekTo((p.currentPosition - 10_000).coerceAtLeast(0))
+                showVodControlsBriefly()
+                return true
+            }
+            KeyEvent.KEYCODE_3 -> {
+                val seekMs = if (event.repeatCount > 0) 30_000L else 10_000L
+                p.seekTo(p.currentPosition + seekMs)
+                showVodControlsBriefly()
+                return true
+            }
+            // Info: show current position/duration overlay
+            KeyEvent.KEYCODE_INFO -> {
+                showVodControlsBriefly()
                 return true
             }
             // Back
@@ -318,6 +372,18 @@ class PlayerActivity : ComponentActivity() {
     // ── Live key handling (existing behaviour) ────────────────────────────
 
     private fun handleLiveKey(event: KeyEvent): Boolean {
+
+        // ── When track picker is open, only capture BACK — let Compose handle all D-pad navigation ──
+        if (showTrackPicker.value) {
+            return when (event.keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    showTrackPicker.value = false
+                    true
+                }
+                else -> super.dispatchKeyEvent(event)
+            }
+        }
+
         when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (showRecentBar.value) {
@@ -349,10 +415,6 @@ class PlayerActivity : ComponentActivity() {
                 // BACK closes overlays
                 if (showRecentBar.value) {
                     showRecentBar.value = false
-                    return true
-                }
-                if (showTrackPicker.value) {
-                    showTrackPicker.value = false
                     return true
                 }
             }
@@ -416,10 +478,17 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_CONTENT_TYPE      = "content_type"
         const val EXTRA_CONTENT_ID        = "content_id"
         const val EXTRA_RESUME_MS         = "resume_ms"
-        const val EXTRA_RECENT_CHANNELS   = "recent_channels"
+        const val EXTRA_RECENT_CHANNELS    = "recent_channels"
         const val EXTRA_FAVORITE_CHANNELS = "favorite_channels"
         const val EXTRA_NEXT_URL          = "next_url"
         const val EXTRA_NEXT_TITLE        = "next_title"
+        const val RESULT_PLAYBACK_ERROR     = RESULT_FIRST_USER + 1
+
+        // Speed options (indices into this list)
+        val SPEED_OPTIONS = listOf(0.5f, 1f, 1.25f, 1.5f, 2f)
+
+        // Quality options: null = Auto, Int = max height in px
+        val QUALITY_OPTIONS = listOf(null, 2160, 1080, 720, 480)
     }
 }
 
@@ -449,7 +518,8 @@ private fun PlayerScreen(
     onSwitchChannel: (url: String, title: String) -> Unit,
     playerError: State<String?>,
     onDismissError: () -> Unit,
-    onPlayerError: (String) -> Unit
+    onPlayerError: (String) -> Unit,
+    onVodPlaybackError: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val appContext = LocalContext.current.applicationContext
@@ -472,7 +542,7 @@ private fun PlayerScreen(
             }
             override fun onPlayerError(error: PlaybackException) {
                 if (isVod) {
-                    onPlayerError?.invoke(error.message ?: "Playback failed")
+                    onVodPlaybackError()
                 } else {
                     val retryJob = scope.launch {
                         delay(3_000)
@@ -487,13 +557,55 @@ private fun PlayerScreen(
         onDispose { player.removeListener(listener) }
     }
 
-    // Resume banner
-    var showResumeBanner by remember { mutableStateOf(resumeMs > 30_000L) }
-    LaunchedEffect(Unit) {
-        if (showResumeBanner) {
-            delay(5_000)
-            showResumeBanner = false
-        }
+    // Resume dialog — shown when resumeMs > 60s so user can choose to start over or resume
+    var showResumeDialog by remember { mutableStateOf(resumeMs > 60_000L) }
+    if (showResumeDialog) {
+        val mins = (resumeMs / 1000 / 60).toInt()
+        val secs = (resumeMs / 1000 % 60).toInt()
+        AlertDialog(
+            onDismissRequest = { showResumeDialog = false },
+            title = { Text("Resume playback?", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Continue from $mins:${"%02d".format(secs)}?", fontSize = 14.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Or start from the beginning.", fontSize = 12.sp, color = TextMuted)
+                }
+            },
+            confirmButton = {
+                var resumeFocused by remember { mutableStateOf(false) }
+                Text(
+                    "Resume",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (resumeFocused) AccentBlue else TextSecondary,
+                    modifier = Modifier
+                        .focusable()
+                        .onFocusChanged { resumeFocused = it.isFocused }
+                        .clickable {
+                            showResumeDialog = false
+                            player.seekTo(resumeMs)
+                        }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            },
+            dismissButton = {
+                var startFocused by remember { mutableStateOf(false) }
+                Text(
+                    "Start over",
+                    fontSize = 14.sp,
+                    color = if (startFocused) TextPrimary else TextMuted,
+                    modifier = Modifier
+                        .focusable()
+                        .onFocusChanged { startFocused = it.isFocused }
+                        .clickable {
+                            showResumeDialog = false
+                            player.seekTo(0)
+                        }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+        )
     }
 
     // Track selector state
@@ -504,6 +616,18 @@ private fun PlayerScreen(
     // Currently selected group indices (null = off / not selected)
     var selectedAudioGroupIdx by remember { mutableStateOf<Int?>(null) }
     var selectedTextGroupIdx by remember { mutableStateOf<Int?>(null) }
+
+    // Speed selector: index into SPEED_OPTIONS, default 1 (1×)
+    var selectedSpeedIdx by remember { mutableIntStateOf(1) }
+
+    // Quality selector: index into QUALITY_OPTIONS, default 0 (Auto)
+    var selectedQualityIdx by remember { mutableIntStateOf(0) }
+
+    // Local aliases so lambdas passed to TrackPickerPanel don't capture mutables
+    val qualityOptions = PlayerActivity.QUALITY_OPTIONS
+    val speedOptions = PlayerActivity.SPEED_OPTIONS
+    val onSelectQuality: (Int) -> Unit = { idx -> selectedQualityIdx = idx }
+    val onSelectSpeed: (Int) -> Unit = { idx -> selectedSpeedIdx = idx }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -591,30 +715,6 @@ private fun PlayerScreen(
             VodControlsOverlay(player = player, title = currentTitle.ifEmpty { title })
         }
 
-        // ── Resume banner ─────────────────────────────────────────────────
-        if (showResumeBanner) {
-            val mins = (resumeMs / 1000 / 60).toInt()
-            val secs = (resumeMs / 1000 % 60).toInt()
-            Box(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(20.dp)
-                    .background(Color(0xCC000000), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-            ) {
-                Column {
-                    Text(
-                        "▶ Resumed from %d:%02d".format(mins, secs),
-                        color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        if (isVod) "Use ◀ / ▶ to seek" else "Press ← to restart from beginning",
-                        color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp
-                    )
-                }
-            }
-        }
-
         // ── Resolution overlay ────────────────────────────────────────────
         if (showResolution.value) {
             val label = when {
@@ -667,87 +767,73 @@ private fun PlayerScreen(
             }
         }
 
-        // ── Track picker ──────────────────────────────────────────────────
+        // ── Track picker — bottom panel ──────────────────────────────────
         if (showTrackPicker.value) {
+            // Non-capturing local alias — avoids lambda capture type narrowing to State
+            val pickerState = showTrackPicker
             Box(
                 Modifier
-                    .align(Alignment.Center)
-                    .background(Color(0xEE0C0F1A), RoundedCornerShape(16.dp))
-                    .padding(24.dp)
-                    .widthIn(min = 280.dp, max = 420.dp)
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .clickable(onClick = { (pickerState as MutableState<Boolean>).value = false })
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Audio, Subtitles & Video",
-                        color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(4.dp))
-
-                    if (audioTracks.isNotEmpty()) {
-                        Text("AUDIO", color = Color(0xFF4D8EFF), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        audioTracks.forEach { (label, groupIdx) ->
-                            TrackRow(
-                                label = label,
-                                isSelected = selectedAudioGroupIdx == groupIdx,
-                                onSelect = {
-                                    val group = player.currentTracks.groups.getOrNull(groupIdx) ?: return@TrackRow
-                                    player.trackSelectionParameters = player.trackSelectionParameters
-                                        .buildUpon()
-                                        .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
-                                        .build()
-                                }
-                            )
+                TrackPickerPanel(
+                    player = player,
+                    audioTracks = audioTracks.map { TrackItem.Audio(it.first, it.second) },
+                    textTracks = listOf(TrackItem.Text("Off", -1, true)) +
+                        textTracks.map { TrackItem.Text(it.first, it.second, false) },
+                    selectedAudioGroupIdx = selectedAudioGroupIdx,
+                    selectedTextGroupIdx = selectedTextGroupIdx,
+                    onSelectAudio = { groupIdx ->
+                        val group = player.currentTracks.groups.getOrNull(groupIdx) ?: return@TrackPickerPanel
+                        player.trackSelectionParameters = player.trackSelectionParameters
+                            .buildUpon()
+                            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+                            .build()
+                        selectedAudioGroupIdx = groupIdx
+                    },
+                    onSelectText = { groupIdxOrNull ->
+                        if (groupIdxOrNull == null || groupIdxOrNull == -1) {
+                            // Turn subtitles OFF
+                            player.trackSelectionParameters = player.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                                .build()
+                            selectedTextGroupIdx = -1
+                        } else {
+                            val group = player.currentTracks.groups.getOrNull(groupIdxOrNull) ?: return@TrackPickerPanel
+                            // Turn subtitles ON with specific track
+                            player.trackSelectionParameters = player.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+                                .build()
+                            selectedTextGroupIdx = groupIdxOrNull
                         }
-                    }
-
-                    if (textTracks.isNotEmpty()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text("SUBTITLES", color = Color(0xFF4D8EFF), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        TrackRow(
-                            label = "Off",
-                            isSelected = selectedTextGroupIdx == null,
-                            onSelect = {
-                                player.trackSelectionParameters = player.trackSelectionParameters
-                                    .buildUpon()
-                                    .setIgnoredTextSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                                    .build()
+                    },
+                    qualityOptions = qualityOptions,
+                    selectedQualityIdx = selectedQualityIdx,
+                    onSelectQuality = { idx ->
+                        val maxHeight = qualityOptions[idx]
+                        player.trackSelectionParameters = player.trackSelectionParameters
+                            .buildUpon()
+                            .apply {
+                                if (maxHeight != null) setMaxVideoSize(Int.MAX_VALUE, maxHeight)
+                                else setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
                             }
-                        )
-                        textTracks.forEach { (label, groupIdx) ->
-                            TrackRow(
-                                label = label,
-                                isSelected = selectedTextGroupIdx == groupIdx,
-                                onSelect = {
-                                    val group = player.currentTracks.groups.getOrNull(groupIdx) ?: return@TrackRow
-                                    player.trackSelectionParameters = player.trackSelectionParameters
-                                        .buildUpon()
-                                        .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
-                                        .build()
-                                }
-                            )
-                        }
-                    }
-
-                    // ── Aspect ratio / video section ──────────────────────
-                    Spacer(Modifier.height(4.dp))
-                    Text("VIDEO", color = Color(0xFF4D8EFF), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    TrackRow(label = "Fit", isSelected = resizeMode.intValue == AspectRatioFrameLayout.RESIZE_MODE_FIT) {
-                        resizeMode.intValue = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    }
-                    TrackRow(label = "Zoom", isSelected = resizeMode.intValue == AspectRatioFrameLayout.RESIZE_MODE_ZOOM) {
-                        resizeMode.intValue = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    }
-                    TrackRow(label = "Stretch", isSelected = resizeMode.intValue == AspectRatioFrameLayout.RESIZE_MODE_FILL) {
-                        resizeMode.intValue = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                    }
-
-                    if (audioTracks.isEmpty() && textTracks.isEmpty()) {
-                        Text(
-                            "No alternate tracks available",
-                            color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp
-                        )
-                    }
-                }
+                            .build()
+                        onSelectQuality(idx)
+                    },
+                    speedOptions = speedOptions,
+                    selectedSpeedIdx = selectedSpeedIdx,
+                    onSelectSpeed = { idx ->
+                        player.setPlaybackSpeed(speedOptions[idx])
+                        onSelectSpeed(idx)
+                    },
+                    onDismiss = { (pickerState as MutableState<Boolean>).value = false },
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
             }
         }
 
@@ -1142,44 +1228,377 @@ private fun QuickSwitchCard(
 }
 
 @Composable
-private fun TrackRow(label: String, isSelected: Boolean, onSelect: () -> Unit) {
+private fun TrackChip(
+    label: String,
+    isSelected: Boolean,
+    onSelect: () -> Unit
+) {
     var focused by remember { mutableStateOf(false) }
     val isActive = focused || isSelected
     Box(
         modifier = Modifier
-            .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(
                 when {
-                    isActive && isSelected -> Color(0xFF00CFFF).copy(alpha = 0.2f)
+                    isActive && isSelected -> Color(0xFF00CFFF).copy(alpha = 0.25f)
                     isActive -> Color(0xFF162040)
-                    else -> Color.Transparent
+                    else -> Color(0xFF0D1525)
                 }
             )
             .then(
                 if (isActive) Modifier.border(
                     if (isSelected) 1.5.dp else 1.dp,
-                    if (isSelected) Color(0xFF00CFFF) else Color(0xFF4D8EFF).copy(alpha = 0.5f),
+                    if (isSelected) Color(0xFF00CFFF) else Color(0xFF4D8EFF).copy(alpha = 0.6f),
                     RoundedCornerShape(8.dp)
                 ) else Modifier
             )
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickable(onClick = onSelect)
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 label,
-                color = if (isActive) Color.White else Color.White.copy(alpha = 0.6f),
-                fontSize = 15.sp
+                color = if (isActive) Color.White else Color.White.copy(alpha = 0.55f),
+                fontSize = 14.sp
             )
             if (isSelected) {
-                Text("✓", color = Color(0xFF00CFFF), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("✓", color = Color(0xFF00CFFF), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AudioTracksRow(
+    tracks: List<TrackItem.Audio>,
+    selectedGroupIdx: Int?,
+    onSelect: (groupIndex: Int) -> Unit
+) {
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(selectedGroupIdx) {
+        if (selectedGroupIdx != null) {
+            val idx = tracks.indexOfFirst { it.groupIndex == selectedGroupIdx }
+            if (idx >= 0) listState.animateScrollToItem(idx)
+        }
+    }
+
+    LazyRow(
+        state = listState,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp)
+    ) {
+        items(tracks, key = { "audio_${it.groupIndex}" }) { track ->
+            TrackChip(
+                label = track.label,
+                isSelected = track.groupIndex == selectedGroupIdx,
+                onSelect = { onSelect(track.groupIndex) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun QualityRow(
+    options: List<Int?>,
+    selectedIdx: Int,
+    onSelect: (Int) -> Unit
+) {
+    val labels = options.map { it?.let { h -> "${h}p" } ?: "Auto" }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(selectedIdx) {
+        if (selectedIdx >= 0) listState.animateScrollToItem(selectedIdx)
+    }
+
+    LazyRow(
+        state = listState,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp)
+    ) {
+        items(options.size) { idx ->
+            TrackChip(
+                label = labels[idx],
+                isSelected = idx == selectedIdx,
+                onSelect = { onSelect(idx) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SpeedRow(
+    options: List<Float>,
+    selectedIdx: Int,
+    onSelect: (Int) -> Unit
+) {
+    val labels = options.map { if (it == 1f) "1×" else "${it}×" }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(selectedIdx) {
+        if (selectedIdx >= 0) listState.animateScrollToItem(selectedIdx)
+    }
+
+    LazyRow(
+        state = listState,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp)
+    ) {
+        items(options.size) { idx ->
+            TrackChip(
+                label = labels[idx],
+                isSelected = idx == selectedIdx,
+                onSelect = { onSelect(idx) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubtitleTracksRow(
+    tracks: List<TrackItem.Text>,
+    selectedGroupIdx: Int?,
+    onSelect: (groupIndex: Int?) -> Unit
+) {
+    val listState = rememberLazyListState()
+
+    val selectedIdx = tracks.indexOfFirst {
+        if (it.isOff) selectedGroupIdx == null || selectedGroupIdx == -1
+        else it.groupIndex == selectedGroupIdx
+    }
+
+    LaunchedEffect(selectedGroupIdx) {
+        if (selectedIdx >= 0) listState.animateScrollToItem(selectedIdx)
+    }
+
+    LazyRow(
+        state = listState,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp)
+    ) {
+        items(tracks, key = { if (it.isOff) "text_off" else "text_${it.groupIndex}" }) { track ->
+            val isSelected = if (track.isOff) {
+                selectedGroupIdx == null || selectedGroupIdx == -1
+            } else {
+                track.groupIndex == selectedGroupIdx
+            }
+            TrackChip(
+                label = track.label,
+                isSelected = isSelected,
+                onSelect = {
+                    if (track.isOff) onSelect(null)
+                    else onSelect(track.groupIndex)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrackPickerPanel(
+    player: ExoPlayer,
+    audioTracks: List<TrackItem.Audio>,
+    textTracks: List<TrackItem.Text>,
+    selectedAudioGroupIdx: Int?,
+    selectedTextGroupIdx: Int?,
+    onSelectAudio: (Int) -> Unit,
+    onSelectText: (Int?) -> Unit,
+    qualityOptions: List<Int?>,
+    selectedQualityIdx: Int,
+    onSelectQuality: (Int) -> Unit,
+    speedOptions: List<Float>,
+    selectedSpeedIdx: Int,
+    onSelectSpeed: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isPlaying by remember { mutableStateOf(player.isPlaying) }
+    var position by remember { mutableLongStateOf(player.currentPosition) }
+    var duration by remember { mutableLongStateOf(player.duration.coerceAtLeast(0)) }
+
+    val progressFocus = remember { FocusRequester() }
+    val audioFocus = remember { FocusRequester() }
+    val subtitleFocus = remember { FocusRequester() }
+    val qualityFocus = remember { FocusRequester() }
+    val speedFocus = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        delay(80)
+        try { progressFocus.requestFocus() } catch (_: Exception) {}
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            isPlaying = player.isPlaying
+            position = player.currentPosition
+            duration = player.duration.coerceAtLeast(0)
+            delay(250)
+        }
+    }
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xEE000000))))
+            .padding(24.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+
+            // Section 1: Progress bar + time
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .focusRequester(progressFocus)
+                    .focusProperties {
+                        down = audioFocus
+                        up = speedFocus
+                    }
+                    .focusable()
+            ) {
+                Column {
+                    LinearProgressIndicator(
+                        progress = { if (duration > 0) position.toFloat() / duration.toFloat() else 0f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp),
+                        color = Color(0xFF00CFFF),
+                        trackColor = Color.White.copy(alpha = 0.2f)
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            formatMs(position),
+                            color = Color.White,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            "AUDIO & SUBTITLES",
+                            color = Color(0xFF00CFFF),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.5.sp
+                        )
+                        Text(
+                            formatMs(duration),
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+
+            // Section 2: Audio tracks
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .focusRequester(audioFocus)
+                    .focusProperties {
+                        down = subtitleFocus
+                        up = progressFocus
+                    }
+            ) {
+                Column {
+                    Text(
+                        "AUDIO",
+                        color = Color(0xFF00CFFF),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+                    )
+                    AudioTracksRow(audioTracks, selectedAudioGroupIdx, onSelectAudio)
+                }
+            }
+
+            // Section 3: Subtitle tracks
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .focusRequester(subtitleFocus)
+                    .focusProperties {
+                        down = qualityFocus
+                        up = audioFocus
+                    }
+            ) {
+                Column {
+                    Text(
+                        "SUBTITLES",
+                        color = Color(0xFF00CFFF),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+                    )
+                    SubtitleTracksRow(textTracks, selectedTextGroupIdx, onSelectText)
+                }
+            }
+
+            // Section 4: Quality
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .focusRequester(qualityFocus)
+                    .focusProperties {
+                        down = speedFocus
+                        up = subtitleFocus
+                    }
+            ) {
+                Column {
+                    Text(
+                        "QUALITY",
+                        color = Color(0xFF00CFFF),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+                    )
+                    QualityRow(qualityOptions, selectedQualityIdx) { idx ->
+                        val maxHeight = qualityOptions[idx]
+                        player.trackSelectionParameters = player.trackSelectionParameters
+                            .buildUpon()
+                            .apply {
+                                if (maxHeight != null) setMaxVideoSize(Int.MAX_VALUE, maxHeight)
+                                else setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
+                            }
+                            .build()
+                        onSelectQuality(idx)
+                    }
+                }
+            }
+
+            // Section 5: Speed
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .focusRequester(speedFocus)
+                    .focusProperties {
+                        down = progressFocus
+                        up = qualityFocus
+                    }
+            ) {
+                Column {
+                    Text(
+                        "PLAYBACK SPEED",
+                        color = Color(0xFF00CFFF),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+                    )
+                    SpeedRow(speedOptions, selectedSpeedIdx) { idx ->
+                        player.setPlaybackSpeed(speedOptions[idx])
+                        onSelectSpeed(idx)
+                    }
+                }
             }
         }
     }
