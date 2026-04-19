@@ -21,7 +21,7 @@ class IPTVApiService(context: Context? = null) {
     private val client = OkHttpClient.Builder()
         .apply {
             if (context != null) {
-                cache(Cache(File(context.cacheDir, "okhttp_cache"), 10L * 1024 * 1024))
+                cache(Cache(File(context.cacheDir, "okhttp_cache"), 50L * 1024 * 1024))
             }
         }
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -100,7 +100,7 @@ class IPTVApiService(context: Context? = null) {
     private suspend inline fun <reified T> fetchList(url: String): List<T> {
         val json = get(url)
         return try {
-            val type = object : TypeToken<List<T>>() {}.type
+            val type = TypeToken.getParameterized(List::class.java, T::class.java).type
             gson.fromJson(json, type) ?: emptyList()
         } catch (e: Exception) {
             emptyList()

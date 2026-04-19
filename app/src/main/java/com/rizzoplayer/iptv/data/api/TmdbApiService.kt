@@ -19,7 +19,7 @@ class TmdbApiService(context: Context? = null) {
 
     private val client = OkHttpClient.Builder().apply {
         if (context != null) {
-            cache(Cache(File(context.cacheDir, "okhttp_tmdb_cache"), 10L * 1024 * 1024))
+            cache(Cache(File(context.cacheDir, "okhttp_tmdb_cache"), 50L * 1024 * 1024))
         }
         connectTimeout(10, TimeUnit.SECONDS)
         readTimeout(15, TimeUnit.SECONDS)
@@ -102,8 +102,8 @@ class TmdbApiService(context: Context? = null) {
         withContext(Dispatchers.IO) {
             val json = get(url)
             try {
-                gson.fromJson(json, TmdbPage::class.java) as? TmdbPage<T>
-                    ?: TmdbPage(emptyList(), 1, 1)
+                val type = TypeToken.getParameterized(TmdbPage::class.java, T::class.java).type
+                gson.fromJson<TmdbPage<T>>(json, type) ?: TmdbPage(emptyList(), 1, 1)
             } catch (e: Exception) {
                 TmdbPage(emptyList(), 1, 1)
             }

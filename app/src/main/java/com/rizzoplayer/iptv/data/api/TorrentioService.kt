@@ -17,7 +17,7 @@ class TorrentioService(context: Context? = null) {
 
     private val client = OkHttpClient.Builder().apply {
         if (context != null) {
-            cache(Cache(File(context.cacheDir, "okhttp_torrentio_cache"), 5L * 1024 * 1024))
+            cache(Cache(File(context.cacheDir, "okhttp_torrentio_cache"), 50L * 1024 * 1024))
         }
         connectTimeout(10, TimeUnit.SECONDS)
         readTimeout(15, TimeUnit.SECONDS)

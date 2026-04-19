@@ -33,7 +33,7 @@ class IPTVRepository(
         diskCache.get(key, ttlMs)?.let { json ->
             return withContext(Dispatchers.Default) {
                 try {
-                    val type = object : TypeToken<List<T>>() {}.type
+                    val type = TypeToken.getParameterized(List::class.java, T::class.java).type
                     gson.fromJson(json, type) ?: emptyList()
                 } catch (e: Exception) {
                     emptyList()

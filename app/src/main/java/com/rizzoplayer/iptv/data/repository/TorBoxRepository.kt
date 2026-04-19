@@ -15,7 +15,7 @@ sealed class StreamResolution {
     data object Searching : StreamResolution()
     data object Queuing : StreamResolution()
     data class Caching(val percent: Int) : StreamResolution()
-    data class Ready(val url: String) : StreamResolution()
+    data class Ready(val url: String, val fallbackHashes: List<String> = emptyList()) : StreamResolution()
     data class Failed(val reason: String) : StreamResolution()
 }
 
@@ -25,11 +25,21 @@ class TorBoxRepository(
 ) {
     private val TORBOX_CONFIG = "torbox=${BuildConfig.TORBOX_API_KEY}"
 
-    private fun parseInfoHash(stream: TorrentioStream): String? {
+    fun parseInfoHash(stream: TorrentioStream): String? {
         val url = stream.url
         return if (url.startsWith("magnet:?xt=urn:btih:")) {
             url.removePrefix("magnet:?xt=urn:btih:").split("&").firstOrNull()
         } else null
+    }
+
+    suspend fun fetchMovieStreams(imdbId: String): List<TorrentioStream> {
+        val streams = torrentio.getMovieStream(TORBOX_CONFIG, imdbId).streams
+        return rankStreams(streams)
+    }
+
+    suspend fun fetchEpisodeStreams(imdbId: String, season: Int, episode: Int): List<TorrentioStream> {
+        val streams = torrentio.getEpisodeStream(TORBOX_CONFIG, imdbId, season, episode).streams
+        return rankStreams(streams)
     }
 
     private fun parseQuality(s: TorrentioStream): Int {
@@ -75,6 +85,7 @@ class TorBoxRepository(
 
         val ranked = rankStreams(streams)
         val hashes = ranked.mapNotNull { parseInfoHash(it) }.distinct()
+        val fallbackHashes = ranked.drop(1).mapNotNull { parseInfoHash(it) }.distinct().take(5)
 
         val cachedMap = try { torBox.checkCached(hashes) } catch (e: Exception) { emptyMap() }
 
@@ -102,7 +113,7 @@ class TorBoxRepository(
             val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
             if (info != null) {
                 val url = getDownloadUrl(torrentId, info.files)
-                if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
+                if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
             }
             // Fall through to polling if something went wrong
         }
@@ -116,7 +127,7 @@ class TorBoxRepository(
                 val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
                 if (info.isCompleted) {
                     val url = getDownloadUrl(torrentId, info.files)
-                    if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
+                    if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
                 }
                 emit(StreamResolution.Caching(pct))
             }
@@ -137,6 +148,7 @@ class TorBoxRepository(
 
         val ranked = rankStreams(streams)
         val hashes = ranked.mapNotNull { parseInfoHash(it) }.distinct()
+        val fallbackHashes = ranked.drop(1).mapNotNull { parseInfoHash(it) }.distinct().take(5)
         val cachedMap = try { torBox.checkCached(hashes) } catch (e: Exception) { emptyMap() }
 
         val bestStream = ranked.firstOrNull { s ->
@@ -160,7 +172,7 @@ class TorBoxRepository(
             val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
             if (info != null) {
                 val url = getDownloadUrl(torrentId, info.files)
-                if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
+                if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
             }
         }
 
@@ -172,11 +184,45 @@ class TorBoxRepository(
                 val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
                 if (info.isCompleted) {
                     val url = getDownloadUrl(torrentId, info.files)
-                    if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
+                    if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
                 }
                 emit(StreamResolution.Caching(pct))
             }
         }
         emit(StreamResolution.Failed("Timed out preparing episode"))
+    }
+
+    fun resolveFallback(hash: String): Flow<StreamResolution> = flow {
+        emit(StreamResolution.Queuing)
+        val magnet = "magnet:?xt=urn:btih:$hash"
+        val result = try { torBox.addMagnet(magnet) } catch (e: Exception) {
+            TorBoxAddResult(success = false, error = e.message)
+        }
+        if (!result.success || result.torrentId == null) {
+            emit(StreamResolution.Failed(result.message ?: "Failed to queue fallback torrent")); return@flow
+        }
+        val torrentId = result.torrentId!!
+
+        emit(StreamResolution.Caching(100))
+        val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+        if (info != null) {
+            val url = getDownloadUrl(torrentId, info.files)
+            if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
+        }
+
+        val startTime = System.currentTimeMillis()
+        while (System.currentTimeMillis() - startTime < 90_000L) {
+            delay(2_000)
+            val torrentInfo = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            if (torrentInfo != null) {
+                val pct = (torrentInfo.percentDone * 100).toInt().coerceIn(0, 99)
+                if (torrentInfo.isCompleted) {
+                    val dlUrl = getDownloadUrl(torrentId, torrentInfo.files)
+                    if (dlUrl != null) { emit(StreamResolution.Ready(dlUrl)); return@flow }
+                }
+                emit(StreamResolution.Caching(pct))
+            }
+        }
+        emit(StreamResolution.Failed("Timed out preparing fallback stream"))
     }
 }

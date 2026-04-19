@@ -3,12 +3,14 @@ package com.rizzoplayer.iptv.data.model
 import com.google.gson.annotations.SerializedName
 import androidx.compose.runtime.Immutable
 
+@Immutable
 data class TmdbGenre(
     @SerializedName("id")   val id: Int,
     @SerializedName("name") val name: String
 )
 
 // Wrapper for /genre/movie/list and /genre/tv/list responses: {"genres": [...]}
+@Immutable
 data class TmdbGenreResponse(
     @SerializedName("genres") val genres: List<TmdbGenre> = emptyList()
 )
@@ -74,18 +76,21 @@ data class TmdbEpisode(
  * Generic response wrapper for paginated TMDB lists.
  * Note: Gson requires a TypeToken to deserialize generic types correctly.
  */
+@Immutable
 data class TmdbPage<T>(
     @SerializedName("results")     val results: List<T> = emptyList(),
     @SerializedName("page")        val page: Int = 1,
     @SerializedName("total_pages") val totalPages: Int = 1
 )
 
+@Immutable
 data class TorrentioStream(
     @SerializedName("url")   val url: String = "",
     @SerializedName("title") val title: String = "", // e.g. quality info, torrent name + size
     @SerializedName("name")  val name: String = ""   // addon source, e.g. "[TB+] Torrentio\n4k DV"
 )
 
+@Immutable
 data class TorrentioResponse(
     @SerializedName("streams") val streams: List<TorrentioStream> = emptyList()
 )
