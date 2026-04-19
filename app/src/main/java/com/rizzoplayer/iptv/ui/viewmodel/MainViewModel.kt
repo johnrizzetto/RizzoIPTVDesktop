@@ -14,6 +14,8 @@ import com.rizzoplayer.iptv.data.repository.TmdbRepository
 import com.rizzoplayer.iptv.data.repository.TorBoxRepository
 import com.rizzoplayer.iptv.data.repository.StreamResolution
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -143,42 +145,43 @@ class MainViewModel(
     private fun launchUrlCacheRefresh() {
         val creds = _state.value.credentials ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            // Refresh recent URLs
-            val newRecentCache = mutableMapOf<String, String>()
-            recentlyWatched.value.take(8).forEach { item ->
-                try {
-                    val id = item.id.toIntOrNull() ?: return@forEach
-                    val url = when (item.type) {
-                        "live" -> repository.getLiveUrl(creds, id)
-                        "vod" -> repository.getVodUrl(creds, id)
-                        "episode" -> repository.getEpisodeUrl(creds, id, item.ext ?: "mp4")
-                        else -> return@forEach
-                    }
-                    newRecentCache[item.id] = url
-                } catch (_: Exception) {}
+            // Refresh recent URLs in parallel
+            val recentDeferreds = recentlyWatched.value.take(8).map { item ->
+                async {
+                    try {
+                        val id = item.id.toIntOrNull() ?: return@async null
+                        val url = when (item.type) {
+                            "live" -> repository.getLiveUrl(creds, id)
+                            "vod" -> repository.getVodUrl(creds, id)
+                            "episode" -> repository.getEpisodeUrl(creds, id, item.ext ?: "mp4")
+                            else -> return@async null
+                        }
+                        item.id to url
+                    } catch (_: Exception) { null }
+                }
             }
-            synchronized(recentUrlCache) {
-                recentUrlCache.clear()
-                recentUrlCache.putAll(newRecentCache)
+            val newRecentCache = recentDeferreds.awaitAll().filterNotNull().toMap()
+            recentUrlCache.clear()
+            recentUrlCache.putAll(newRecentCache)
+
+            // Refresh favorite URLs in parallel
+            val favDeferreds = favorites.value.values.map { fav ->
+                async {
+                    try {
+                        val id = fav.id.toIntOrNull() ?: return@async null
+                        val url = when (fav.type) {
+                            "live" -> repository.getLiveUrl(creds, id)
+                            "vod" -> repository.getVodUrl(creds, id)
+                            "episode" -> repository.getEpisodeUrl(creds, id, fav.ext ?: "mp4")
+                            else -> return@async null
+                        }
+                        fav.id to url
+                    } catch (_: Exception) { null }
+                }
             }
-            // Refresh favorite URLs
-            val newFavCache = mutableMapOf<String, String>()
-            favorites.value.values.forEach { fav ->
-                try {
-                    val id = fav.id.toIntOrNull() ?: return@forEach
-                    val url = when (fav.type) {
-                        "live" -> repository.getLiveUrl(creds, id)
-                        "vod" -> repository.getVodUrl(creds, id)
-                        "episode" -> repository.getEpisodeUrl(creds, id, fav.ext ?: "mp4")
-                        else -> return@forEach
-                    }
-                    newFavCache[fav.id] = url
-                } catch (_: Exception) {}
-            }
-            synchronized(favoriteUrlCache) {
-                favoriteUrlCache.clear()
-                favoriteUrlCache.putAll(newFavCache)
-            }
+            val newFavCache = favDeferreds.awaitAll().filterNotNull().toMap()
+            favoriteUrlCache.clear()
+            favoriteUrlCache.putAll(newFavCache)
         }
     }
 
