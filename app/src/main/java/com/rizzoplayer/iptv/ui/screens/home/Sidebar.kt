@@ -26,33 +26,39 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
+import kotlinx.coroutines.launch
 import com.rizzoplayer.iptv.R
+import com.rizzoplayer.iptv.ui.navigation.Screen
 import com.rizzoplayer.iptv.ui.theme.*
 import com.rizzoplayer.iptv.ui.viewmodel.Section
 
-private data class NavEntry(val icon: String, val label: String, val section: Section)
+private data class NavEntry(val icon: String, val label: String, val route: String)
 private val NAV_ENTRIES = listOf(
-    NavEntry("▶", "Live",      Section.LIVE),
-    NavEntry("▣", "Movies",    Section.VOD),
-    NavEntry("≡", "Shows",     Section.SERIES),
-    NavEntry("♥", "Favorites", Section.FAVORITES)
+    NavEntry("▶", "Live",      Screen.Live.route),
+    NavEntry("▣", "Movies",    Screen.Movies.route),
+    NavEntry("≡", "Shows",     Screen.Shows.route),
+    NavEntry("♥", "Favorites", Screen.Favorites.route),
+    NavEntry("⚙", "Settings",  Screen.Settings.route)
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun Sidebar(
     widthDp: Dp,
     expanded: Boolean,
-    currentSection: Section,
+    navController: NavHostController,
+    currentRoute: String,
     canGoBack: Boolean,
-    navFocusRequesters: List<FocusRequester>,
     onFocusEnter: () -> Unit,
     onFocusExit: () -> Unit,
-    onSelect: (Section) -> Unit,
     onBack: () -> Unit,
     onLogout: () -> Unit,
     contentFocusRestorer: FocusRequester,
+    onSelectSection: (String) -> Unit,
 ) {
     var showLogoutDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     if (showLogoutDialog) {
         AlertDialog(
@@ -74,6 +80,7 @@ fun Sidebar(
         horizontalAlignment = if (expanded) Alignment.Start else Alignment.CenterHorizontally
     ) {
         val signOutFocusRequester = remember { FocusRequester() }
+        val sidebarNavFocusRequesters = remember { List(NAV_ENTRIES.size) { FocusRequester() } }
         Image(
             painter = painterResource(id = R.drawable.logo),
             contentDescription = null,
@@ -87,18 +94,28 @@ fun Sidebar(
         Spacer(Modifier.height(16.dp))
 
         NAV_ENTRIES.forEachIndexed { idx, entry ->
-            val upTarget = if (idx == 0) signOutFocusRequester else navFocusRequesters[idx - 1]
-            val downTarget = if (idx == NAV_ENTRIES.lastIndex) signOutFocusRequester else navFocusRequesters[idx + 1]
+            val upTarget = if (idx == 0) signOutFocusRequester else sidebarNavFocusRequesters[idx - 1]
+            val downTarget = if (idx == NAV_ENTRIES.lastIndex) signOutFocusRequester else sidebarNavFocusRequesters[idx + 1]
             SidebarNavItem(
                 icon = entry.icon,
                 label = entry.label,
-                active = currentSection == entry.section,
+                active = currentRoute == entry.route,
                 expanded = expanded,
-                fr = navFocusRequesters[idx],
+                fr = sidebarNavFocusRequesters[idx],
                 upTarget = upTarget,
                 downTarget = downTarget,
-                rightTarget = contentFocusRestorer,
-                onClick = { onSelect(entry.section) },
+                onClick = {
+                    onSelectSection(entry.route)
+                    scope.launch {
+                        for (i in 1..20) {
+                            kotlinx.coroutines.delay(100)
+                            try {
+                                contentFocusRestorer.requestFocus()
+                                break
+                            } catch (_: Exception) {}
+                        }
+                    }
+                },
             )
             Spacer(Modifier.height(2.dp))
         }
@@ -110,8 +127,13 @@ fun Sidebar(
                 label = "Back",
                 active = false,
                 expanded = expanded,
-                rightTarget = contentFocusRestorer,
-                onClick = onBack,
+                onClick = {
+                    onBack()
+                    scope.launch {
+                        kotlinx.coroutines.delay(100)
+                        try { contentFocusRestorer.requestFocus() } catch (_: Exception) {}
+                    }
+                },
             )
         }
 
@@ -125,9 +147,8 @@ fun Sidebar(
             expanded = expanded,
             danger = true,
             fr = signOutFocusRequester,
-            upTarget = navFocusRequesters.last(),
-            downTarget = navFocusRequesters.first(),
-            rightTarget = contentFocusRestorer,
+            upTarget = sidebarNavFocusRequesters.last(),
+            downTarget = sidebarNavFocusRequesters.first(),
             onClick = { showLogoutDialog = true },
         )
     }
@@ -144,7 +165,6 @@ private fun SidebarNavItem(
     danger: Boolean = false,
     upTarget: FocusRequester? = null,
     downTarget: FocusRequester? = null,
-    rightTarget: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -181,20 +201,19 @@ private fun SidebarNavItem(
             .background(bg)
             .then(
                 if (focused) Modifier.border(
-                    1.dp,
+                    2.dp,
                     if (danger) RedColor.copy(alpha = 0.45f)
-                    else AccentBlue.copy(alpha = 0.45f),
+                    else AccentBlue,
                     RoundedCornerShape(6.dp)
                 )
                 else Modifier
             )
             .onFocusChanged { focused = it.isFocused }
             .then(
-                if (upTarget != null || downTarget != null || rightTarget != null) {
+                if (upTarget != null || downTarget != null) {
                     Modifier.focusProperties {
                         if (upTarget != null) up = upTarget
                         if (downTarget != null) down = downTarget
-                        if (rightTarget != null) right = rightTarget
                     }
                 } else Modifier
             )

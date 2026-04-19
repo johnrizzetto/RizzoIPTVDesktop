@@ -2,60 +2,84 @@ package com.rizzoplayer.iptv.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.CachePolicy
-import coil.request.ImageRequest
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.rizzoplayer.iptv.R
-import com.rizzoplayer.iptv.RizzoApp
-import com.rizzoplayer.iptv.data.local.PlaybackPositionStore
 import com.rizzoplayer.iptv.data.model.*
-import com.rizzoplayer.iptv.ui.theme.*
-import com.rizzoplayer.iptv.ui.viewmodel.*
+import com.rizzoplayer.iptv.ui.navigation.Screen
 import com.rizzoplayer.iptv.ui.screens.home.*
+import com.rizzoplayer.iptv.ui.theme.*
+import com.rizzoplayer.iptv.ui.viewmodel.MainViewModel
+import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
+import com.rizzoplayer.iptv.ui.viewmodel.Section
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ROOT
+// ROOT — Sidebar + NavHost
 // ═══════════════════════════════════════════════════════════════════════════
 
 @Composable
 fun HomeScreen(viewModel: MainViewModel) {
+    val navController = rememberNavController()
     val state by viewModel.state.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
     val favoritesList by viewModel.favoritesList.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
 
-    BackHandler(enabled = state.canGoBack) { viewModel.goBack() }
+    // Which top-level screen is currently active — drives sidebar highlight
+    // Observe NavHost directly so sidebar highlight stays in sync with actual navigation
+    val navBackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute: String = navBackEntry?.destination?.route ?: Screen.Live.route
+
+    BackHandler {
+        when {
+            state.canGoBack -> {
+                viewModel.goBack()
+                return@BackHandler
+            }
+            else -> {
+                // At top-level, navigate back to Live
+                navController.navigate(Screen.Live.route) {
+                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
 
     var sidebarExpanded by remember { mutableStateOf(false) }
     val sidebarWidth by animateDpAsState(
@@ -63,35 +87,47 @@ fun HomeScreen(viewModel: MainViewModel) {
         animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioNoBouncy),
         label = "sidebar",
     )
-    val navFocusRequesters = remember { NAV_ENTRIES.map { FocusRequester() } }
-    val contentFocusRestorer = remember { FocusRequester() }
 
-    LaunchedEffect(sidebarExpanded) {
-        if (sidebarExpanded) {
-            kotlinx.coroutines.delay(50)
-            val idx = NAV_ENTRIES.indexOfFirst { it.section == state.section }
-            if (idx >= 0) {
-                try { navFocusRequesters[idx].requestFocus() } catch (_: Exception) {}
-            }
+    // Focus requester for the NavHost content area (first focusable item lands here on section change)
+    val contentFocusRestorer = remember { FocusRequester() }
+    // Flag: set when NavHost Box receives focus, read by content to redirect focus to first item
+    var shouldFocusFirstItem by remember { mutableStateOf(false) }
+
+    // Navigate + update ViewModel state in one call
+    val navigateAndSelectSection: (String) -> Unit = { route ->
+        navController.navigate(route) {
+            popUpTo(navController.graph.startDestinationId) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
         }
+        val section = when (route) {
+            Screen.Live.route      -> Section.LIVE
+            Screen.Movies.route   -> Section.VOD
+            Screen.Shows.route     -> Section.SERIES
+            Screen.Favorites.route -> Section.FAVORITES
+            Screen.Settings.route -> null  // Settings has no section state
+            else -> null
+        }
+        section?.let { viewModel.selectSection(it) }
     }
 
     Row(Modifier.fillMaxSize().background(MainBg)) {
 
         Sidebar(
+            navController = navController,
             widthDp = sidebarWidth,
             expanded = sidebarExpanded,
-            currentSection = state.section,
+            currentRoute = currentRoute,
+            onSelectSection = navigateAndSelectSection,
             canGoBack = state.canGoBack,
-            navFocusRequesters = navFocusRequesters,
             onFocusEnter = { sidebarExpanded = true },
             onFocusExit = { sidebarExpanded = false },
-            onSelect = { viewModel.selectSection(it) },
             onBack = viewModel::goBack,
             onLogout = viewModel::logout,
             contentFocusRestorer = contentFocusRestorer,
         )
 
+        // ── NavHost column ──────────────────────────────────────────────────
         Column(Modifier.weight(1f).fillMaxHeight()) {
 
             // Continue Watching strip
@@ -127,35 +163,50 @@ fun HomeScreen(viewModel: MainViewModel) {
                 }
             }
 
-            // Content
+            // NavHost content
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .focusGroup()
-                    .focusProperties {
-                        left = navFocusRequesters.lastOrNull() ?: FocusRequester.Default
-                    }
+                    .focusRequester(contentFocusRestorer)
                     .focusable()
+                    .onFocusChanged { if (it.isFocused) shouldFocusFirstItem = true }
             ) {
-                when {
-                    state.isLoading -> LoadingView()
-                    state.error != null -> ErrorView(
-                        message = state.error!!,
-                        onDismiss = viewModel::retryCurrent,
-                        onReload = viewModel::retryReload
-                    )
-                    else -> ContentArea(
-                        content = state.content,
-                        searchQuery = state.searchQuery,
-                        favorites = favorites,
-                        favoritesList = favoritesList,
-                        viewModel = viewModel
-                    )
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.Live.route,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    composable(Screen.Live.route) {
+                        LaunchedEffect(Unit) { viewModel.selectSection(Section.LIVE) }
+                        LiveContent(viewModel, state, favorites, favoritesList, shouldFocusFirstItem)
+                    }
+                    composable(Screen.Movies.route) {
+                        LaunchedEffect(Unit) { viewModel.selectSection(Section.VOD) }
+                        MoviesContent(viewModel, state, favorites, favoritesList, continueWatching, shouldFocusFirstItem)
+                    }
+                    composable(Screen.Shows.route) {
+                        LaunchedEffect(Unit) { viewModel.selectSection(Section.SERIES) }
+                        ShowsContent(viewModel, state, favorites, favoritesList, continueWatching, shouldFocusFirstItem)
+                    }
+                    composable(Screen.Favorites.route) {
+                        LaunchedEffect(Unit) { viewModel.selectSection(Section.FAVORITES) }
+                        FavoritesContent(viewModel, favoritesList)
+                    }
+                    composable(Screen.Settings.route) {
+                        SettingsScreen(
+                            preferencesStore = viewModel.preferencesStore,
+                            onClearCache = {
+                                viewModel.repository.clearCache()
+                            },
+                            onLogout = viewModel::logout,
+                            onBack = viewModel::goBack,
+                        )
+                    }
                 }
             }
         }
 
-        // Overlays — toast and stream picker
+        // Overlays
         val toastMessage = state.toastMessage
         LaunchedEffect(toastMessage) {
             if (toastMessage != null) {
@@ -182,10 +233,20 @@ fun HomeScreen(viewModel: MainViewModel) {
         }
 
         state.streamSelection?.let { selection ->
-            StreamPickerDialog(
-                selection = selection,
+            PremiumStreamSelectionOverlay(
+                title = selection.title,
+                streams = selection.streams,
                 onSelect = viewModel::playSelectedStream,
-                onDismiss = viewModel::dismissStreamSelection
+                onDismiss = viewModel::dismissStreamSelection,
+            )
+        }
+
+        state.tmdbStreamSelection?.let { selection ->
+            PremiumStreamSelectionOverlay(
+                title = selection.title,
+                streams = selection.streams,
+                onSelect = viewModel::playSelectedTmdbStream,
+                onDismiss = viewModel::dismissTmdbStreamSelection,
             )
         }
 
@@ -198,52 +259,338 @@ fun HomeScreen(viewModel: MainViewModel) {
     }
 }
 
-private data class NavEntry(val icon: String, val label: String, val section: Section)
-private val NAV_ENTRIES = listOf(
-    NavEntry("▶", "Live",      Section.LIVE),
-    NavEntry("▣", "Movies",    Section.VOD),
-    NavEntry("≡", "Shows",     Section.SERIES),
-    NavEntry("♥", "Favorites", Section.FAVORITES)
-)
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTENT COMPOSABLES (one per nav destination)
+// ═══════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun LiveContent(
+    viewModel: MainViewModel,
+    state: com.rizzoplayer.iptv.ui.viewmodel.MainUiState,
+    favorites: Map<String, Favorite>,
+    favoritesList: List<Favorite>,
+    shouldFocusFirstItem: Boolean = false
+) {
+    val q = state.searchQuery.trim().lowercase()
+
+    when {
+        state.isLoading -> LoadingView()
+        state.error != null -> ErrorView(
+            message = state.error,
+            onDismiss = viewModel::retryCurrent,
+            onReload = viewModel::retryReload
+        )
+        else -> when (val content = state.content) {
+            is BrowseContent.Categories -> {
+                val filtered = remember(content, q) {
+                    if (q.isEmpty()) content.items
+                    else content.items.filter { it.name.lowercase().contains(q) }
+                }
+                LiveCategoriesContent(
+                    items = filtered,
+                    onSelect = { viewModel.selectCategory(it, Section.LIVE, 0) },
+                    onPlay = viewModel::onPlayLive,
+                    onFavToggle = { s -> viewModel.toggleFavorite(s.id.toString(), s.name, "live", icon = s.icon) },
+                    shouldFocusFirstItem = shouldFocusFirstItem
+                )
+            }
+            is BrowseContent.LiveStreams -> {
+                val filtered = remember(content, q) {
+                    if (q.isEmpty()) content.items
+                    else content.items.filter { it.name.lowercase().contains(q) }
+                }
+                LiveStreamsContent(
+                    items = filtered,
+                    favorites = favorites,
+                    onPlay = viewModel::onPlayLive,
+                    onFavToggle = { s -> viewModel.toggleFavorite(s.id.toString(), s.name, "live", icon = s.icon) },
+                    shouldFocusFirstItem = shouldFocusFirstItem
+                )
+            }
+            else -> EmptyHint("Select a category")
+        }
+    }
+}
+
+@Composable
+private fun MoviesContent(
+    viewModel: MainViewModel,
+    state: com.rizzoplayer.iptv.ui.viewmodel.MainUiState,
+    favorites: Map<String, Favorite>,
+    favoritesList: List<Favorite>,
+    continueWatching: List<RecentItem>,
+    shouldFocusFirstItem: Boolean = false
+) {
+    val q = state.searchQuery.trim().lowercase()
+
+    when {
+        state.isLoading -> LoadingView()
+        state.error != null -> ErrorView(
+            message = state.error,
+            onDismiss = viewModel::retryCurrent,
+            onReload = viewModel::retryReload
+        )
+        else -> when (val content = state.content) {
+            is BrowseContent.Categories -> {
+                val filtered = remember(content, q) {
+                    if (q.isEmpty()) content.items
+                    else content.items.filter { it.name.lowercase().contains(q) }
+                }
+                TmdbCategoriesContent(
+                    items = filtered,
+                    onSelect = { viewModel.selectCategory(it, Section.VOD, 0) },
+                    shouldFocusFirstItem = shouldFocusFirstItem
+                )
+            }
+            is BrowseContent.TmdbMovies -> {
+                MoviesHome(
+                    content = content,
+                    favorites = favorites,
+                    continueWatchingItems = continueWatching,
+                    onSelectMovie = viewModel::selectTmdbMovie,
+                    onToggleFavorite = { movie ->
+                        viewModel.toggleFavorite(
+                            id   = movie.id.toString(),
+                            name = movie.title,
+                            type = "tmdb_movie",
+                            icon = movie.posterPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
+                        )
+                    },
+                    onPlayRecent = viewModel::onPlayRecent,
+                    onFocusPrefetch = viewModel::prefetchMovie
+                )
+            }
+            is BrowseContent.TmdbMovieDetail -> {
+                TmdbMovieDetailView(
+                    movie = content.movie,
+                    isFavorite = favorites.containsKey(content.movie.id.toString()),
+                    onPlay = { viewModel.onPlayTmdbMovie(content.movie) },
+                    onToggleFavorite = {
+                        viewModel.toggleFavorite(
+                            id   = content.movie.id.toString(),
+                            name = content.movie.title,
+                            type = "tmdb_movie",
+                            icon = content.movie.posterPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
+                        )
+                    }
+                )
+            }
+            else -> EmptyHint("Select a category")
+        }
+    }
+}
+
+@Composable
+private fun ShowsContent(
+    viewModel: MainViewModel,
+    state: com.rizzoplayer.iptv.ui.viewmodel.MainUiState,
+    favorites: Map<String, Favorite>,
+    favoritesList: List<Favorite>,
+    continueWatching: List<RecentItem>,
+    shouldFocusFirstItem: Boolean = false
+) {
+    val q = state.searchQuery.trim().lowercase()
+
+    when {
+        state.isLoading -> LoadingView()
+        state.error != null -> ErrorView(
+            message = state.error,
+            onDismiss = viewModel::retryCurrent,
+            onReload = viewModel::retryReload
+        )
+        else -> when (val content = state.content) {
+            is BrowseContent.Categories -> {
+                val filtered = remember(content, q) {
+                    if (q.isEmpty()) content.items
+                    else content.items.filter { it.name.lowercase().contains(q) }
+                }
+                TmdbCategoriesContent(
+                    items = filtered,
+                    onSelect = { viewModel.selectCategory(it, Section.SERIES, 0) },
+                    shouldFocusFirstItem = shouldFocusFirstItem
+                )
+            }
+            is BrowseContent.TmdbShows -> {
+                SeriesHome(
+                    content = content,
+                    favorites = favorites,
+                    continueWatchingItems = continueWatching,
+                    onSelectShow = viewModel::selectTmdbShow,
+                    onToggleFavorite = { show ->
+                        viewModel.toggleFavorite(
+                            id   = show.id.toString(),
+                            name = show.name,
+                            type = "tmdb_show",
+                            icon = show.posterPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
+                        )
+                    },
+                    onPlayRecent = viewModel::onPlayRecent,
+                    onFocusPrefetch = viewModel::prefetchShow
+                )
+            }
+            is BrowseContent.TmdbShowDetail -> {
+                TmdbShowDetailView(
+                    show = content.show,
+                    seasons = content.seasons,
+                    favorites = favorites,
+                    onPlay = { episode -> viewModel.onPlayTmdbEpisode(content.show, episode) },
+                    onFavToggle = { episode ->
+                        viewModel.toggleFavorite(
+                            id = "${content.show.id}:${episode.seasonNumber}:${episode.episodeNumber}",
+                            name = episode.name.ifEmpty { "Episode ${episode.episodeNumber}" },
+                            type = "tmdb_episode",
+                            icon = episode.stillPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
+                        )
+                    }
+                )
+            }
+            else -> EmptyHint("Select a category")
+        }
+    }
+}
+
+@Composable
+private fun FavoritesContent(
+    viewModel: MainViewModel,
+    favoritesList: List<Favorite>
+) {
+    FavoritesView(
+        favorites = favoritesList,
+        onPlay = viewModel::onPlayFavorite,
+        onRemove = { fav -> viewModel.toggleFavorite(fav.id, fav.name, fav.type, fav.ext) },
+        onMove = { fav, dir -> viewModel.moveFavorite(fav.id, dir) }
+    )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TMDB CATEGORIES SHARED CONTENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun TmdbCategoriesContent(
+    items: List<Category>,
+    onSelect: (Category) -> Unit,
+    shouldFocusFirstItem: Boolean = false
+) {
+    val listState = rememberLazyListState()
+    val firstItemFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(items) {
+        kotlinx.coroutines.delay(200)
+        try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
+        kotlinx.coroutines.delay(50)
+        try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
+    }
+    LaunchedEffect(shouldFocusFirstItem) {
+        if (shouldFocusFirstItem) {
+            kotlinx.coroutines.delay(50)
+            try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
+        }
+    }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp)
+    ) {
+        items(items, key = { it.id }, contentType = { "Category" }) { cat ->
+            val isFirst = items.firstOrNull()?.id == cat.id
+            CategoryRow(
+                category = cat,
+                onSelect = { onSelect(cat) },
+                modifier = if (isFirst) Modifier.focusRequester(firstItemFocusRequester) else Modifier
+            )
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIVE STREAMS (categories + channel list)
+// ═══════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun LiveCategoriesContent(
+    items: List<Category>,
+    onSelect: (Category) -> Unit,
+    onPlay: (LiveStream) -> Unit,
+    onFavToggle: (LiveStream) -> Unit,
+    shouldFocusFirstItem: Boolean = false
+) {
+    val listState = rememberLazyListState()
+    val firstItemFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(items) {
+        kotlinx.coroutines.delay(200)
+        try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
+        kotlinx.coroutines.delay(50)
+        try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
+    }
+    LaunchedEffect(shouldFocusFirstItem) {
+        if (shouldFocusFirstItem) {
+            kotlinx.coroutines.delay(50)
+            try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
+        }
+    }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp)
+    ) {
+        items(items, key = { it.id }, contentType = { "Category" }) { cat ->
+            val isFirst = items.firstOrNull()?.id == cat.id
+            CategoryRow(
+                category = cat,
+                onSelect = { onSelect(cat) },
+                modifier = if (isFirst) Modifier.focusRequester(firstItemFocusRequester) else Modifier
+            )
+        }
+    }
+}
+
+@Composable
+private fun LiveStreamsContent(
+    items: List<LiveStream>,
+    favorites: Map<String, Favorite>,
+    onPlay: (LiveStream) -> Unit,
+    onFavToggle: (LiveStream) -> Unit,
+    shouldFocusFirstItem: Boolean = false
+) {
+    val listState = rememberLazyListState()
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(items) {
+        kotlinx.coroutines.delay(200)
+        try { firstFocus.requestFocus() } catch (_: Exception) {}
+        kotlinx.coroutines.delay(50)
+        try { firstFocus.requestFocus() } catch (_: Exception) {}
+    }
+    LaunchedEffect(shouldFocusFirstItem) {
+        if (shouldFocusFirstItem) {
+            kotlinx.coroutines.delay(50)
+            try { firstFocus.requestFocus() } catch (_: Exception) {}
+        }
+    }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp)
+    ) {
+        items(items, key = { it.id }, contentType = { "LiveStream" }) { stream ->
+            val isFav = favorites.containsKey(stream.id.toString())
+            val isFirst = items.firstOrNull()?.id == stream.id
+            ChannelRow(
+                stream = stream,
+                isFavorite = isFav,
+                onPlay = { onPlay(stream) },
+                onFavToggle = { onFavToggle(stream) },
+                modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier
+            )
+        }
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // OVERLAYS & DIALOGS
 // ═══════════════════════════════════════════════════════════════════════════
-
-@Composable
-private fun StreamPickerDialog(
-    selection: StreamSelectionState,
-    onSelect: (TorrentioStream) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var focusedIdx by remember { mutableIntStateOf(0) }
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(selection.title, color = TextPrimary) },
-        text = {
-            Column {
-                selection.streams.forEachIndexed { idx, stream ->
-                    val isSelected = idx == focusedIdx
-                    Text(
-                        stream.title,
-                        fontSize = 13.sp,
-                        color = if (isSelected) AccentBlue else TextMuted,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (isSelected) AccentBlue.copy(alpha = 0.15f) else Color.Transparent)
-                            .onFocusChanged { if (it.isFocused) focusedIdx = idx }
-                            .focusable()
-                            .clickable { onSelect(stream) }
-                            .padding(8.dp)
-                    )
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
-}
 
 @Composable
 fun LoadingView() {
@@ -290,7 +637,7 @@ fun ErrorView(message: String, onDismiss: () -> Unit, onReload: () -> Unit) {
 }
 
 @Composable
-fun PlaybackPrepOverlay(prep: PlaybackPrep, onCancel: () -> Unit) {
+fun PlaybackPrepOverlay(prep: com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep, onCancel: () -> Unit) {
     val cancelFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { cancelFocus.requestFocus() }
 
@@ -332,17 +679,17 @@ fun PlaybackPrepOverlay(prep: PlaybackPrep, onCancel: () -> Unit) {
             )
             Spacer(Modifier.height(6.dp))
             val stageLabel = when (prep.stage) {
-                PlaybackPrep.Stage.SEARCHING -> "Searching for streams…"
-                PlaybackPrep.Stage.QUEUING -> "Adding to TorBox…"
-                PlaybackPrep.Stage.CACHING -> "Caching torrent…"
-                PlaybackPrep.Stage.READY -> "Ready!"
-                PlaybackPrep.Stage.FAILED -> "Failed"
+                com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep.Stage.SEARCHING -> "Searching for streams…"
+                com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep.Stage.QUEUING -> "Adding to TorBox…"
+                com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep.Stage.CACHING -> "Caching torrent…"
+                com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep.Stage.READY -> "Ready!"
+                com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep.Stage.FAILED -> "Failed"
             }
             Text(
                 stageLabel,
                 color = when (prep.stage) {
-                    PlaybackPrep.Stage.FAILED -> RedColor
-                    PlaybackPrep.Stage.READY -> Color(0xFF4DFF4D)
+                    com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep.Stage.FAILED -> RedColor
+                    com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep.Stage.READY -> Color(0xFF4DFF4D)
                     else -> AccentBlue
                 },
                 fontSize = 11.sp

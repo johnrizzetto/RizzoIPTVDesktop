@@ -120,7 +120,7 @@ private fun FavoriteRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
             .background(if (focused) CardFocused else CardBg)
-            .then(if (focused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.5f), RoundedCornerShape(6.dp)) else Modifier)
+            .then(if (focused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickable(onClick = onPlay)

@@ -1,5 +1,8 @@
 package com.rizzoplayer.iptv.ui.screens.home
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,6 +11,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -134,7 +138,8 @@ fun ContentArea(
                         icon = movie.posterPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}$it" }
                     )
                 },
-                onPlayRecent = viewModel::onPlayRecent
+                onPlayRecent = viewModel::onPlayRecent,
+                onFocusPrefetch = viewModel::prefetchMovie
             )
         }
 
@@ -168,7 +173,8 @@ fun ContentArea(
                         icon = show.posterPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}$it" }
                     )
                 },
-                onPlayRecent = viewModel::onPlayRecent
+                onPlayRecent = viewModel::onPlayRecent,
+                onFocusPrefetch = viewModel::prefetchShow
             )
         }
 
@@ -248,14 +254,14 @@ private fun CategoryList(
 }
 
 @Composable
-private fun CategoryRow(category: Category, onSelect: () -> Unit, modifier: Modifier = Modifier) {
+fun CategoryRow(category: Category, onSelect: () -> Unit, modifier: Modifier = Modifier) {
     var focused by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
             .background(if (focused) NavFocusBg else Color.Transparent)
-            .then(if (focused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.4f), RoundedCornerShape(6.dp)) else Modifier)
+            .then(if (focused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickable(onClick = onSelect)
@@ -314,7 +320,7 @@ private fun ChannelList(
 }
 
 @Composable
-private fun ChannelRow(
+fun ChannelRow(
     stream: LiveStream,
     isFavorite: Boolean,
     onPlay: () -> Unit,
@@ -327,7 +333,7 @@ private fun ChannelRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
             .background(if (focused) NavFocusBg else Color.Transparent)
-            .then(if (focused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.4f), RoundedCornerShape(6.dp)) else Modifier)
+            .then(if (focused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickable(onClick = onPlay)
@@ -435,7 +441,7 @@ private fun PosterCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
             .background(if (focused) CardFocused else CardBg)
-            .then(if (focused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.5f), RoundedCornerShape(6.dp)) else Modifier)
+            .then(if (focused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickable(onClick = onPlay)

@@ -55,7 +55,8 @@ fun MoviesHome(
     continueWatchingItems: List<RecentItem> = emptyList(),
     onSelectMovie: (TmdbMovie) -> Unit,
     onToggleFavorite: (TmdbMovie) -> Unit,
-    onPlayRecent: ((RecentItem) -> Unit)? = null
+    onPlayRecent: ((RecentItem) -> Unit)? = null,
+    onFocusPrefetch: ((Int) -> Unit)? = null
 ) {
     val hero = content.items.firstOrNull()
     val heroBackdrop = hero?.backdropPath?.let {
@@ -176,7 +177,8 @@ fun MoviesHome(
             content = content,
             favorites = favorites,
             onSelectMovie = onSelectMovie,
-            onToggleFavorite = onToggleFavorite
+            onToggleFavorite = onToggleFavorite,
+            onFocusPrefetch = onFocusPrefetch
         )
     }
 }
@@ -187,7 +189,8 @@ fun TmdbMovieGrid(
     content: BrowseContent.TmdbMovies,
     favorites: Map<String, Favorite>,
     onSelectMovie: (TmdbMovie) -> Unit,
-    onToggleFavorite: (TmdbMovie) -> Unit
+    onToggleFavorite: (TmdbMovie) -> Unit,
+    onFocusPrefetch: ((Int) -> Unit)? = null
 ) {
     val firstFocus = remember { FocusRequester() }
     val listState = rememberLazyGridState()
@@ -235,6 +238,8 @@ fun TmdbMovieGrid(
                 onFocusChanged = { focused = it },
                 onClick = { onSelectMovie(movie) },
                 onLongClick = { onToggleFavorite(movie) },
+                onFocusPrefetch = onFocusPrefetch,
+                prefetchId = movie.id,
                 modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier
             )
         }
@@ -256,7 +261,9 @@ fun TmdbPosterCard(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     cardWidth: androidx.compose.ui.unit.Dp = 120.dp,
-    posterHeight: androidx.compose.ui.unit.Dp = 180.dp
+    posterHeight: androidx.compose.ui.unit.Dp = 180.dp,
+    onFocusPrefetch: ((Int) -> Unit)? = null,
+    prefetchId: Int? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isCardFocused by interactionSource.collectIsFocusedAsState()
@@ -270,7 +277,12 @@ fun TmdbPosterCard(
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .focusable(interactionSource = interactionSource)
                 .clickable(onClick = onClick)
-                .onFocusChanged { onFocusChanged(it.isFocused) }
+                .onFocusChanged {
+                onFocusChanged(it.isFocused)
+                if (it.isFocused && prefetchId != null && onFocusPrefetch != null) {
+                    onFocusPrefetch.invoke(prefetchId)
+                }
+            }
                 .then(
                     if (isCardFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(8.dp))
                     else Modifier

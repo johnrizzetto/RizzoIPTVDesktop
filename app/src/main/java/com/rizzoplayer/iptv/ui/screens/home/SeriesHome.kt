@@ -51,7 +51,8 @@ fun SeriesHome(
     continueWatchingItems: List<RecentItem> = emptyList(),
     onSelectShow: (TmdbShow) -> Unit,
     onToggleFavorite: (TmdbShow) -> Unit,
-    onPlayRecent: ((RecentItem) -> Unit)? = null
+    onPlayRecent: ((RecentItem) -> Unit)? = null,
+    onFocusPrefetch: ((Int) -> Unit)? = null
 ) {
     val hero = content.items.firstOrNull()
     val heroBackdrop = hero?.backdropPath?.let {
@@ -171,7 +172,8 @@ fun SeriesHome(
             content = content,
             favorites = favorites,
             onSelectShow = onSelectShow,
-            onToggleFavorite = onToggleFavorite
+            onToggleFavorite = onToggleFavorite,
+            onFocusPrefetch = onFocusPrefetch
         )
     }
 }
@@ -181,7 +183,8 @@ fun TmdbShowGrid(
     content: BrowseContent.TmdbShows,
     favorites: Map<String, Favorite>,
     onSelectShow: (TmdbShow) -> Unit,
-    onToggleFavorite: (TmdbShow) -> Unit
+    onToggleFavorite: (TmdbShow) -> Unit,
+    onFocusPrefetch: ((Int) -> Unit)? = null
 ) {
     val firstFocus = remember { FocusRequester() }
     val listState = rememberLazyGridState()
@@ -229,6 +232,9 @@ fun TmdbShowGrid(
                 onFocusChanged = { focused = it },
                 onClick = { onSelectShow(show) },
                 onLongClick = { onToggleFavorite(show) },
+                onFocusPrefetch = onFocusPrefetch,
+                prefetchId = show.id,
+                modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier,
                 cardWidth = 120.dp,
                 posterHeight = 180.dp
             )
@@ -249,6 +255,19 @@ fun TmdbShowDetailView(
     var selectedSeasonIdx by remember { mutableIntStateOf(0) }
     val seasonFocus = remember { FocusRequester() }
     val episodeFocus = remember { FocusRequester() }
+    var episodeFocusTrigger by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(episodeFocusTrigger) {
+        if (episodeFocusTrigger > 0) {
+            kotlinx.coroutines.delay(80)
+            try { episodeFocus.requestFocus() } catch (_: Exception) {}
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(120)
+        try { episodeFocus.requestFocus() } catch (_: Exception) {}
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Header with backdrop
@@ -341,12 +360,12 @@ fun TmdbShowDetailView(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
                             .background(if (isSelected) AccentBlue.copy(alpha = 0.2f) else Color.Transparent)
-                            .then(if (focused && !isSelected) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.5f), RoundedCornerShape(4.dp)) else Modifier)
+                            .then(if (focused && !isSelected) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(4.dp)) else Modifier)
                             .onFocusChanged { focused = it.isFocused }
                             .focusable()
                             .clickable {
                                 selectedSeasonIdx = idx
-                                seasonFocus.requestFocus()
+                                episodeFocusTrigger++
                             }
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     )
@@ -392,8 +411,9 @@ fun TmdbEpisodeRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
             .background(if (focused) NavFocusBg else Color.Transparent)
-            .then(if (focused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.4f), RoundedCornerShape(6.dp)) else Modifier)
+            .then(if (focused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
             .onFocusChanged { focused = it.isFocused }
+            .focusRequester(onFocus)
             .focusable()
             .clickable(onClick = onPlay)
             .padding(8.dp),
