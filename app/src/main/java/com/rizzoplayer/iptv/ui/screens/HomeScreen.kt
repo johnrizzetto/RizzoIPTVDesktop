@@ -146,6 +146,7 @@ fun HomeScreen(viewModel: MainViewModel) {
                 query = state.searchQuery,
                 onQueryChange = viewModel::setSearchQuery,
                 onClear = { viewModel.setSearchQuery("") },
+                onVoiceResult = { viewModel.setSearchQuery(it) },
                 downTarget = contentFocusRestorer
             )
 

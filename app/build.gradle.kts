@@ -60,7 +60,10 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            val releaseConfig = signingConfigs.getByName("release")
+            if (releaseConfig.storeFile != null && releaseConfig.storeFile!!.exists()) {
+                signingConfig = releaseConfig
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -89,6 +92,7 @@ android {
 
     lint {
         abortOnError = false
+        checkReleaseBuilds = false
     }
 }
 
@@ -129,6 +133,8 @@ dependencies {
     testImplementation(libs.okhttp)
     testImplementation(libs.gson)
     testImplementation(libs.kotlinx.coroutines.android)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockwebserver)
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.11")
 

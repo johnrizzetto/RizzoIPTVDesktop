@@ -1,5 +1,10 @@
 package com.rizzoplayer.iptv.ui.screens.home
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,10 +35,26 @@ fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     onClear: () -> Unit,
+    onVoiceResult: ((String) -> Unit)? = null,
     focusRequester: FocusRequester = remember { FocusRequester() },
     downTarget: FocusRequester? = null
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var focused by remember { mutableStateOf(false) }
+
+    val voiceLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spokenText = result.data
+                ?.getStringArrayExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+            if (!spokenText.isNullOrBlank()) {
+                onVoiceResult?.invoke(spokenText)
+            }
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -73,6 +94,23 @@ fun SearchBar(
                 fontSize = 12.sp,
                 modifier = Modifier
                     .clickable(onClick = onClear)
+                    .padding(4.dp)
+            )
+        }
+        if (onVoiceResult != null) {
+            Spacer(Modifier.width(4.dp))
+            Text(
+                "🎤",
+                fontSize = 14.sp,
+                color = if (focused) AccentBlue else TextMuted,
+                modifier = Modifier
+                    .clickable {
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                        }
+                        voiceLauncher.launch(intent)
+                    }
                     .padding(4.dp)
             )
         }

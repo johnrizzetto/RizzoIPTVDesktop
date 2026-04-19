@@ -6,15 +6,17 @@ import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import java.io.FileOutputStream
 
 class OpenSubtitlesService(
-    context: Context,
+    private val cacheDir: File,
     private val apiKey: String,
     baseUrl: String = "https://api.opensubtitles.com/api/v1"
 ) {
+    constructor(context: android.content.Context, apiKey: String, baseUrl: String = "https://api.opensubtitles.com/api/v1")
+            : this(context.cacheDir, apiKey, baseUrl)
+
     private val client = OkHttpClient.Builder()
-        .cache(Cache(File(context.cacheDir, "okhttp_opensubtitles_cache"), 10L * 1024 * 1024))
+        .cache(Cache(File(cacheDir, "okhttp_opensubtitles_cache"), 10L * 1024 * 1024))
         .addInterceptor { chain ->
             val req = chain.request().newBuilder()
                 .header("Api-Key", apiKey)
@@ -124,6 +126,7 @@ class OpenSubtitlesService(
                 .get()
                 .build()
             val resp = client.newCall(req).execute()
+            if (!resp.isSuccessful) return null
             resp.body?.bytes()
         } catch (e: Exception) {
             null
