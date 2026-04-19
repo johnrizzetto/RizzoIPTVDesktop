@@ -1,6 +1,9 @@
 package com.rizzoplayer.iptv.ui.viewmodel
 
 import android.app.Application
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -22,8 +25,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.snapshotFlow
 
+@Stable
 enum class Section { LIVE, VOD, SERIES, FAVORITES }
 
+@Stable
 sealed class BrowseContent {
     object Empty : BrowseContent()
     data class Categories(val items: List<Category>, val mode: Section) : BrowseContent()
@@ -39,6 +44,7 @@ sealed class BrowseContent {
     data class TmdbSearchResults(val movies: List<TmdbMovie>, val shows: List<TmdbShow>, val query: String) : BrowseContent()
 }
 
+@Immutable
 data class EpgInfo(
     val channelName: String = "",
     val nowTitle: String = "",
@@ -47,6 +53,7 @@ data class EpgInfo(
     val nextStart: String = ""
 )
 
+@Immutable
 data class PlaybackPrep(
     val title: String,
     val stage: Stage,
@@ -55,6 +62,7 @@ data class PlaybackPrep(
     enum class Stage { SEARCHING, QUEUING, CACHING, READY, FAILED }
 }
 
+@Immutable
 data class StreamSelectionState(
     val streams: List<TorrentioStream>,
     val title: String,
@@ -63,6 +71,16 @@ data class StreamSelectionState(
     val icon: String?
 )
 
+@Immutable
+data class TmdbStreamSelectionState(
+    val streams: List<TorrentioStream>,
+    val title: String,
+    val imdbId: String,
+    val tmdbId: String,
+    val contentId: String
+)
+
+@Stable
 data class MainUiState(
     val section: Section = Section.LIVE,
     val content: BrowseContent = BrowseContent.Empty,
@@ -77,7 +95,9 @@ data class MainUiState(
     val restoreScrollIndex: Int = -1,
     val restoreGridScrollIndex: Int = -1,
     val streamSelection: StreamSelectionState? = null,
-    val playbackPrep: PlaybackPrep? = null
+    val tmdbStreamSelection: TmdbStreamSelectionState? = null,
+    val playbackPrep: PlaybackPrep? = null,
+    val parentalLockActive: Boolean = false,
 )
 
 class MainViewModel(
@@ -85,12 +105,30 @@ class MainViewModel(
     private val tmdbRepository: TmdbRepository,
     private val torBoxRepository: TorBoxRepository,
     private val serversStore: ServersStore,
-    private val preferencesStore: PreferencesStore,
+    val preferencesStore: PreferencesStore,
     application: Application
 ) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow(MainUiState())
     val state: StateFlow<MainUiState> = _state.asStateFlow()
+
+    /** Derives NavHost route from state.section — stays in sync automatically. */
+    val currentRoute: StateFlow<String> = _state.map { state ->
+        when (state.section) {
+            Section.LIVE      -> "live"
+            Section.VOD       -> "movies"
+            Section.SERIES    -> "shows"
+            Section.FAVORITES -> "favorites"
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, "live")
+
+    fun screenToSection(route: String): Section = when (route) {
+        "live"      -> Section.LIVE
+        "movies"   -> Section.VOD
+        "shows"    -> Section.SERIES
+        "favorites" -> Section.FAVORITES
+        else       -> Section.LIVE
+    }
 
     private val _playEvent = MutableSharedFlow<PlayEvent>(extraBufferCapacity = 1)
     val playEvent: SharedFlow<PlayEvent> = _playEvent.asSharedFlow()
@@ -110,6 +148,84 @@ class MainViewModel(
 
     private val _continueWatching = MutableStateFlow<List<RecentItem>>(emptyList())
     val continueWatching: StateFlow<List<RecentItem>> = _continueWatching.asStateFlow()
+
+    // ── TMDB prefetch debounce ───────────────────────────────────────────
+    private var lastPrefetchMovieId: Int = -1
+    private var lastPrefetchMovieTime: Long = 0L
+    private var lastPrefetchShowId: Int = -1
+    private var lastPrefetchShowTime: Long = 0L
+
+    fun prefetchMovie(id: Int) {
+        val now = System.currentTimeMillis()
+        if (id == lastPrefetchMovieId && now - lastPrefetchMovieTime < 500) return
+        lastPrefetchMovieId = id
+        lastPrefetchMovieTime = now
+        viewModelScope.launch {
+            try { tmdbRepository.getMovieDetail(id) } catch (_: Exception) {}
+        }
+    }
+
+    fun prefetchShow(id: Int) {
+        val now = System.currentTimeMillis()
+        if (id == lastPrefetchShowId && now - lastPrefetchShowTime < 500) return
+        lastPrefetchShowId = id
+        lastPrefetchShowTime = now
+        viewModelScope.launch {
+            try { tmdbRepository.getShowDetail(id) } catch (_: Exception) {}
+        }
+    }
+
+    // ── Playback fallback ────────────────────────────────────────────────
+    private var currentFallbackHashes: List<String> = emptyList()
+    private var currentPlaybackTitle: String = ""
+    private var currentContentType: String = ""
+
+    fun onPlaybackError() {
+        val hashes = currentFallbackHashes
+        if (hashes.isEmpty()) {
+            // No fallbacks available — surface an error only if this was a TorBox play
+            if (currentPlaybackTitle.isNotEmpty()) {
+                _state.update { it.copy(error = "Playback failed — no alternative streams available") }
+            }
+            return
+        }
+        playbackPrepJob?.cancel()
+        playbackPrepJob = viewModelScope.launch {
+            _state.update { it.copy(playbackPrep = PlaybackPrep(currentPlaybackTitle, PlaybackPrep.Stage.SEARCHING, "Trying fallback stream...")) }
+            try {
+                torBoxRepository.resolveFallback(hashes.first()).collect { resolution ->
+                    when (resolution) {
+                        is StreamResolution.Searching -> {
+                            _state.update { it.copy(playbackPrep = PlaybackPrep(currentPlaybackTitle, PlaybackPrep.Stage.SEARCHING, "Trying fallback stream...")) }
+                        }
+                        is StreamResolution.Queuing -> {
+                            _state.update { it.copy(playbackPrep = PlaybackPrep(currentPlaybackTitle, PlaybackPrep.Stage.QUEUING, "Queuing fallback...")) }
+                        }
+                        is StreamResolution.Caching -> {
+                            _state.update { it.copy(playbackPrep = PlaybackPrep(currentPlaybackTitle, PlaybackPrep.Stage.CACHING, "Caching fallback ${resolution.percent}%")) }
+                        }
+                        is StreamResolution.Ready -> {
+                            currentFallbackHashes = emptyList()
+                            _state.update { it.copy(playbackPrep = null) }
+                            _playEvent.tryEmit(PlayEvent(resolution.url, currentPlaybackTitle, currentContentType, emptyList(), emptyList()))
+                        }
+                        is StreamResolution.Failed -> {
+                            val remaining = hashes.drop(1)
+                            if (remaining.isNotEmpty()) {
+                                currentFallbackHashes = remaining
+                                onPlaybackError()
+                            } else {
+                                currentFallbackHashes = emptyList()
+                                _state.update { it.copy(playbackPrep = null, error = resolution.reason) }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _state.update { it.copy(playbackPrep = null, error = e.message ?: "Fallback failed") }
+            }
+        }
+    }
 
     private suspend fun resolveStreamUrl(url: String): String = withContext(Dispatchers.IO) {
         try {
@@ -464,6 +580,8 @@ class MainViewModel(
     }
 
     fun onPlayLive(stream: LiveStream) {
+        currentFallbackHashes = emptyList()
+        currentPlaybackTitle = ""
         val creds = _state.value.credentials ?: return
         val url = repository.getLiveUrl(creds, stream.id)
         val recent = RecentItem(stream.id.toString(), stream.name, "live", stream.icon)
@@ -491,37 +609,63 @@ class MainViewModel(
                     _state.update { it.copy(isLoading = false, toastMessage = "Not available on TorBox") }
                     return@launch
                 }
-                _state.update { it.copy(isLoading = false) }
                 val title = detail.title
-                playbackPrepJob?.cancel()
-                playbackPrepJob = viewModelScope.launch {
-                    torBoxRepository.resolveMovie(imdbId).collect { resolution ->
-                        when (resolution) {
-                            is StreamResolution.Searching -> {
-                                _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.SEARCHING, "Searching torrent...")) }
-                            }
-                            is StreamResolution.Queuing -> {
-                                _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")) }
-                            }
-                            is StreamResolution.Caching -> {
-                                _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
-                            }
-                            is StreamResolution.Ready -> {
-                                _state.update { it.copy(playbackPrep = null) }
-                                val recentRefs = buildRecentRefsFromCache(excludeId = detail.id.toString())
-                                val favRefs = buildFavoriteRefsFromCache(excludeId = detail.id.toString())
-                                _playEvent.tryEmit(PlayEvent(resolution.url, title, "vod", recentRefs, favRefs))
-                            }
-                            is StreamResolution.Failed -> {
-                                _state.update { it.copy(playbackPrep = null, error = resolution.reason) }
-                            }
-                        }
-                    }
+                // Fetch streams and show picker
+                val streams = try {
+                    torBoxRepository.fetchMovieStreams(imdbId)
+                } catch (e: Exception) {
+                    _state.update { it.copy(isLoading = false, error = "Failed to search: ${e.message}") }
+                    return@launch
+                }
+                if (streams.isEmpty()) {
+                    _state.update { it.copy(isLoading = false, error = "No streams found") }
+                    return@launch
+                }
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        tmdbStreamSelection = TmdbStreamSelectionState(
+                            streams = streams,
+                            title = title,
+                            imdbId = imdbId,
+                            tmdbId = detail.id.toString(),
+                            contentId = detail.id.toString()
+                        )
+                    )
                 }
             } catch (e: Exception) {
                 _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to play movie") }
             }
         }
+    }
+
+    fun playSelectedTmdbStream(stream: TorrentioStream) {
+        val selection = _state.value.tmdbStreamSelection ?: return
+        _state.update { it.copy(tmdbStreamSelection = null) }
+        currentFallbackHashes = selection.streams
+            .filter { it.url != stream.url }
+            .mapNotNull { torBoxRepository.parseInfoHash(it) }
+            .distinct()
+            .take(5)
+        currentPlaybackTitle = selection.title
+        currentContentType = "vod"
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
+            val resolvedUrl = resolveStreamUrl(stream.url)
+            val recent = RecentItem(selection.contentId, selection.title, "vod", null)
+            _state.update { it.copy(isLoading = false, nowPlaying = recent) }
+            repository.recentlyWatchedStore.add(recent)
+            _playEvent.tryEmit(PlayEvent(
+                url = resolvedUrl,
+                title = selection.title,
+                contentType = "vod",
+                contentId = selection.contentId
+            ))
+        }
+    }
+
+    fun dismissTmdbStreamSelection() {
+        _state.update { it.copy(tmdbStreamSelection = null) }
     }
 
     fun onPlayTmdbEpisode(show: TmdbShow, episode: TmdbEpisode) {
@@ -550,6 +694,9 @@ class MainViewModel(
                             }
                             is StreamResolution.Ready -> {
                                 _state.update { it.copy(playbackPrep = null) }
+                                currentFallbackHashes = resolution.fallbackHashes
+                                currentPlaybackTitle = title
+                                currentContentType = "episode"
                                 val stableId = "${show.id}:${episode.seasonNumber}:${episode.episodeNumber}"
                                 val recentRefs = buildRecentRefsFromCache(excludeId = stableId)
                                 val favRefs = buildFavoriteRefsFromCache(excludeId = stableId)
@@ -591,6 +738,9 @@ class MainViewModel(
                                 }
                                 is StreamResolution.Ready -> {
                                     _state.update { it.copy(playbackPrep = null) }
+                                    currentFallbackHashes = resolution.fallbackHashes
+                                    currentPlaybackTitle = item.name
+                                    currentContentType = item.type
                                     val recentRefs = buildRecentRefsFromCache(excludeId = item.id)
                                     val favRefs = buildFavoriteRefsFromCache(excludeId = item.id)
                                     _playEvent.tryEmit(PlayEvent(resolution.url, item.name, item.type, recentRefs, favRefs))
@@ -627,6 +777,9 @@ class MainViewModel(
                                 }
                                 is StreamResolution.Ready -> {
                                     _state.update { it.copy(playbackPrep = null) }
+                                    currentFallbackHashes = resolution.fallbackHashes
+                                    currentPlaybackTitle = item.name
+                                    currentContentType = item.type
                                     val recentRefs = buildRecentRefsFromCache(excludeId = item.id)
                                     val favRefs = buildFavoriteRefsFromCache(excludeId = item.id)
                                     _playEvent.tryEmit(PlayEvent(resolution.url, item.name, item.type, recentRefs, favRefs))
@@ -639,6 +792,8 @@ class MainViewModel(
                     }
                     return@launch
                 }
+                currentFallbackHashes = emptyList()
+                currentPlaybackTitle = ""
                 val creds = _state.value.credentials ?: return@launch
                 val url = when (item.type) {
                     "live" -> repository.getLiveUrl(creds, item.id.toIntOrNull() ?: return@launch)
@@ -681,6 +836,9 @@ class MainViewModel(
                                 }
                                 is StreamResolution.Ready -> {
                                     _state.update { it.copy(playbackPrep = null) }
+                                    currentFallbackHashes = resolution.fallbackHashes
+                                    currentPlaybackTitle = fav.name
+                                    currentContentType = fav.type
                                     val recentRefs = buildRecentRefsFromCache(excludeId = fav.id)
                                     val favRefs = buildFavoriteRefsFromCache(excludeId = fav.id)
                                     _playEvent.tryEmit(PlayEvent(resolution.url, fav.name, fav.type, recentRefs, favRefs))
@@ -717,6 +875,9 @@ class MainViewModel(
                                 }
                                 is StreamResolution.Ready -> {
                                     _state.update { it.copy(playbackPrep = null) }
+                                    currentFallbackHashes = resolution.fallbackHashes
+                                    currentPlaybackTitle = fav.name
+                                    currentContentType = fav.type
                                     val recentRefs = buildRecentRefsFromCache(excludeId = fav.id)
                                     val favRefs = buildFavoriteRefsFromCache(excludeId = fav.id)
                                     _playEvent.tryEmit(PlayEvent(resolution.url, fav.name, fav.type, recentRefs, favRefs))
@@ -729,6 +890,8 @@ class MainViewModel(
                     }
                     return@launch
                 }
+                currentFallbackHashes = emptyList()
+                currentPlaybackTitle = ""
                 val creds = _state.value.credentials ?: return@launch
                 val url = when (fav.type) {
                     "live" -> repository.getLiveUrl(creds, fav.id.toIntOrNull() ?: return@launch)
@@ -748,6 +911,8 @@ class MainViewModel(
 
     fun playSelectedStream(stream: TorrentioStream) {
         val selection = _state.value.streamSelection ?: return
+        currentFallbackHashes = emptyList()
+        currentPlaybackTitle = ""
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, streamSelection = null) }
             val resolvedUrl = resolveStreamUrl(stream.url)
@@ -822,6 +987,24 @@ class MainViewModel(
             repository.credentialsStore.clear()
             repository.clearCache()
         }
+    }
+
+    fun isParentalLockEnabled(): Boolean = preferencesStore.isParentalLockEnabled()
+
+    fun setParentalLockEnabled(enabled: Boolean) {
+        preferencesStore.setParentalLockEnabled(enabled)
+    }
+
+    fun setParentalLockPin(pin: String) {
+        preferencesStore.setParentalLockPin(pin)
+    }
+
+    fun unlockParentalLock() {
+        _state.update { it.copy(parentalLockActive = false) }
+    }
+
+    fun lockParentalLock() {
+        _state.update { it.copy(parentalLockActive = true) }
     }
 
     // ── Private helpers ───────────────────────────────────────────────────
