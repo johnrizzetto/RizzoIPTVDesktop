@@ -1,2 +1,21 @@
 # Local configuration (API keys)
 local.properties
+
+# Gradle
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+
+# Build outputs
+app/build/
+build/
+
+# IDE
+.idea/
+*.iml
+
+# Keystores
+*.keystore
+*.jks
+
+# Python scripts
+scripts/
