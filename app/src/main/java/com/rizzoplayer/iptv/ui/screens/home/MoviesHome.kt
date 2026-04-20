@@ -175,14 +175,29 @@ fun MoviesHome(
             )
         }
 
-        // Movie grid
-        TmdbMovieGrid(
-            content = content,
-            favorites = favorites,
-            onSelectMovie = onSelectMovie,
-            onToggleFavorite = onToggleFavorite,
-            onFocusPrefetch = onFocusPrefetch
-        )
+        if (content.items.isEmpty()) {
+            Box(
+                Modifier.fillMaxSize().padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("🎬", fontSize = 48.sp)
+                    Spacer(Modifier.height(12.dp))
+                    Text("No titles found", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TextMuted)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Try a different category or check your connection", fontSize = 12.sp, color = TextMuted.copy(alpha = 0.6f))
+                }
+            }
+        } else {
+            // Movie grid
+            TmdbMovieGrid(
+                content = content,
+                favorites = favorites,
+                onSelectMovie = onSelectMovie,
+                onToggleFavorite = onToggleFavorite,
+                onFocusPrefetch = onFocusPrefetch
+            )
+        }
     }
 }
 
