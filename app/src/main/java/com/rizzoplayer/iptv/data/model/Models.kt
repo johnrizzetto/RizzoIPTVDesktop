@@ -1,11 +1,12 @@
 package com.rizzoplayer.iptv.data.model
 
-import com.google.gson.annotations.SerializedName
-
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.Immutable
 
 @Stable
+@Serializable
 data class Credentials(
     val url: String,
     val username: String,
@@ -15,6 +16,7 @@ data class Credentials(
     fun isValid() = url.isNotBlank() && username.isNotBlank() && password.isNotBlank()
 }
 
+@Serializable
 data class ServerConfig(
     val id: String = java.util.UUID.randomUUID().toString(),
     val label: String,
@@ -26,6 +28,7 @@ data class ServerConfig(
 }
 
 @Immutable
+@Serializable
 data class ChannelRef(
     val name: String,
     val url: String,
@@ -33,99 +36,112 @@ data class ChannelRef(
 )
 
 @Immutable
+@Serializable
 data class Category(
-    @SerializedName("category_id") val id: String,
-    @SerializedName("category_name") val name: String,
-    @SerializedName("parent_id") val parentId: Int = 0
+    @SerialName("category_id") val id: String,
+    @SerialName("category_name") val name: String,
+    @SerialName("parent_id") val parentId: Int = 0
 )
 
 @Immutable
+@Serializable
 data class LiveStream(
-    @SerializedName("stream_id") val id: Int,
-    @SerializedName("name") val name: String,
-    @SerializedName("category_id") val categoryId: String? = null,
-    @SerializedName("stream_icon") val icon: String? = null
+    @SerialName("stream_id") val id: Int,
+    @SerialName("name") val name: String,
+    @SerialName("category_id") val categoryId: String? = null,
+    @SerialName("stream_icon") val icon: String? = null
 )
 
 @Immutable
+@Serializable
 data class VodStream(
-    @SerializedName("stream_id") val id: Int,
-    @SerializedName("name") val name: String,
-    @SerializedName("category_id") val categoryId: String? = null,
-    @SerializedName("stream_icon") val icon: String? = null,
-    @SerializedName("container_extension") val containerExtension: String = "mp4"
+    @SerialName("stream_id") val id: Int,
+    @SerialName("name") val name: String,
+    @SerialName("category_id") val categoryId: String? = null,
+    @SerialName("stream_icon") val icon: String? = null,
+    @SerialName("container_extension") val containerExtension: String = "mp4"
 )
 
 @Immutable
+@Serializable
 data class Series(
-    @SerializedName("series_id") val id: Int,
-    @SerializedName("name") val name: String,
-    @SerializedName("category_id") val categoryId: String? = null,
-    @SerializedName("cover") val cover: String? = null
+    @SerialName("series_id") val id: Int,
+    @SerialName("name") val name: String,
+    @SerialName("category_id") val categoryId: String? = null,
+    @SerialName("cover") val cover: String? = null
 )
 
+@Serializable
 data class SeriesInfo(
-    @SerializedName("episodes") val episodes: Map<String, List<Episode>>? = null
+    @SerialName("episodes") val episodes: Map<String, List<Episode>>? = null
 )
 
 @Immutable
+@Serializable
 data class Episode(
-    @SerializedName("id") val id: Int,
-    @SerializedName("title") val title: String? = null,
-    @SerializedName("container_extension") val containerExtension: String = "mp4",
-    @SerializedName("episode_num") val episodeNum: Int = 0
+    @SerialName("id") val id: Int,
+    @SerialName("title") val title: String? = null,
+    @SerialName("container_extension") val containerExtension: String = "mp4",
+    @SerialName("episode_num") val episodeNum: Int = 0
 )
 
+@Serializable
 data class VodInfo(
-    @SerializedName("movie_data") val movieData: MovieData? = null
+    @SerialName("movie_data") val movieData: MovieData? = null
 )
 
+@Serializable
 data class MovieData(
-    @SerializedName("stream_id") val streamId: Int = 0,
-    @SerializedName("container_extension") val containerExtension: String = "mp4"
+    @SerialName("stream_id") val streamId: Int = 0,
+    @SerialName("container_extension") val containerExtension: String = "mp4"
 )
 
+@Serializable
 data class EpgResponse(
-    @SerializedName("epg_listings") val listings: List<EpgListing>? = null
+    @SerialName("epg_listings") val listings: List<EpgListing>? = null
 )
 
 @Immutable
+@Serializable
 data class EpgListing(
-    @SerializedName("title") val title: String = "",
-    @SerializedName("start") val start: String = "",
-    @SerializedName("end") val end: String = ""
+    val title: String = "",
+    val start: String = "",
+    val end: String = ""
 )
 
 @Immutable
+@Serializable
 data class Favorite(
     val id: String,
     val name: String,
-    val type: String,   // "live", "vod", "series", "episode"
+    val type: String,
     val ext: String? = null,
     val icon: String? = null,
     val addedAt: String = ""
 )
 
 @Immutable
+@Serializable
 data class RecentItem(
     val id: String,
     val name: String,
-    val type: String,   // "live", "vod", "episode"
+    val type: String,
     val icon: String? = null,
     val ext: String? = null,
     val watchedAt: Long = System.currentTimeMillis(),
-    val watchedMs: Long = 0,   // playback resume position in milliseconds
-    val durationMs: Long = 0   // total duration for progress display
+    val watchedMs: Long = 0,
+    val durationMs: Long = 0
 )
 
+@Serializable
 data class PlayEvent(
     val url: String,
     val title: String,
-    val contentType: String = "live",   // "live", "vod", "episode"
+    val contentType: String = "live",
     val recentChannels: List<ChannelRef> = emptyList(),
     val favoriteChannels: List<ChannelRef> = emptyList(),
     val resumeMs: Long = 0,
-    val nextUrl: String = "",           // next episode URL for auto-advance
-    val nextTitle: String = "",          // next episode title
-    val contentId: String = ""          // stable ID for position tracking
+    val nextUrl: String = "",
+    val nextTitle: String = "",
+    val contentId: String = ""
 )

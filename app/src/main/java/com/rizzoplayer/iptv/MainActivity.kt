@@ -6,16 +6,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.google.gson.Gson
 import com.rizzoplayer.iptv.data.api.IPTVApiService
 import com.rizzoplayer.iptv.data.local.CredentialsStore
 import com.rizzoplayer.iptv.data.local.DiskCache
-import com.rizzoplayer.iptv.data.model.Favorite
-import com.rizzoplayer.iptv.data.model.PlayEvent
 import com.rizzoplayer.iptv.data.local.FavoritesStore
 import com.rizzoplayer.iptv.data.local.RecentlyWatchedStore
 import com.rizzoplayer.iptv.data.local.ServersStore
+import com.rizzoplayer.iptv.data.model.PlayEvent
 import com.rizzoplayer.iptv.data.repository.IPTVRepository
+import com.rizzoplayer.iptv.data.repository.TmdbRepository
+import com.rizzoplayer.iptv.data.api.TmdbApiService
+import com.rizzoplayer.iptv.data.api.TorrentioService
+import com.rizzoplayer.iptv.data.api.TorBoxApiService
+import com.rizzoplayer.iptv.data.repository.TorBoxRepository
 import com.rizzoplayer.iptv.ui.player.PlayerActivity
 import com.rizzoplayer.iptv.ui.screens.HomeScreen
 import com.rizzoplayer.iptv.ui.screens.LoginScreen
@@ -25,10 +28,12 @@ import com.rizzoplayer.iptv.ui.viewmodel.LoginViewModel
 import com.rizzoplayer.iptv.ui.viewmodel.MainViewModel
 import com.rizzoplayer.iptv.ui.viewmodel.ViewModelFactory
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 class MainActivity : ComponentActivity() {
 
-    private val gson = Gson()
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private var pendingPlayEvent: PlayEvent? = null
     private var mainVm: MainViewModel? = null
 
@@ -56,14 +61,14 @@ class MainActivity : ComponentActivity() {
             diskCache             = DiskCache(applicationContext),
             api                  = IPTVApiService(applicationContext)
         )
-        val tmdbRepository = com.rizzoplayer.iptv.data.repository.TmdbRepository(
-            tmdb = com.rizzoplayer.iptv.data.api.TmdbApiService(applicationContext),
-            torrentio = com.rizzoplayer.iptv.data.api.TorrentioService(applicationContext),
+        val tmdbRepository = TmdbRepository(
+            tmdb = TmdbApiService(applicationContext),
+            torrentio = TorrentioService(applicationContext),
             diskCache = DiskCache(applicationContext, "tmdb_api")
         )
-        val torBoxRepository = com.rizzoplayer.iptv.data.repository.TorBoxRepository(
-            torBox = com.rizzoplayer.iptv.data.api.TorBoxApiService(applicationContext),
-            torrentio = com.rizzoplayer.iptv.data.api.TorrentioService(applicationContext)
+        val torBoxRepository = TorBoxRepository(
+            torBox = TorBoxApiService(applicationContext),
+            torrentio = TorrentioService(applicationContext)
         )
         val serversStore = ServersStore(applicationContext)
         val factory = ViewModelFactory(repository, tmdbRepository, torBoxRepository, serversStore, app.preferencesStore, app)
@@ -88,7 +93,6 @@ class MainActivity : ComponentActivity() {
                     val mainVm: MainViewModel = viewModel(factory = factory)
                     this.mainVm = mainVm
 
-                    // Restore last section on first load
                     LaunchedEffect(Unit) {
                         if (mainVm.state.value.content is BrowseContent.Empty) {
                             mainVm.selectSection(mainVm.restoreLastSection())
@@ -102,11 +106,9 @@ class MainActivity : ComponentActivity() {
                         if (credentialsSeen && credentials == null) isLoggedIn = false
                     }
 
-                    // Collect play events and launch PlayerActivity
                     LaunchedEffect(Unit) {
                         mainVm.playEvent.collect { event ->
                             val positionStore = app.playbackPositionStore
-                            // Build content key for position lookup
                             val contentId = if (event.contentType.startsWith("tmdb_")) {
                                 event.contentId
                             } else {
@@ -115,9 +117,9 @@ class MainActivity : ComponentActivity() {
                             val posKey = "${event.contentType}:$contentId"
                             val resumeMs = positionStore.getPosition(posKey)
                             val recentJson = if (event.recentChannels.isNotEmpty())
-                                gson.toJson(event.recentChannels) else ""
+                                json.encodeToString(event.recentChannels) else ""
                             val favJson = if (event.favoriteChannels.isNotEmpty())
-                                gson.toJson(event.favoriteChannels) else ""
+                                json.encodeToString(event.favoriteChannels) else ""
                             pendingPlayEvent = event
                             startActivityForResult(
                                 Intent(this@MainActivity, PlayerActivity::class.java).apply {

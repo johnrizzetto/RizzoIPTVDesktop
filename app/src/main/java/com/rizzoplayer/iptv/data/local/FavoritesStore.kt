@@ -6,36 +6,30 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.rizzoplayer.iptv.data.model.Favorite
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 private val Context.favDataStore: DataStore<Preferences> by preferencesDataStore("favorites")
 
 class FavoritesStore(private val context: Context) {
 
-    private val gson = Gson()
+    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true }
     private val KEY = stringPreferencesKey("favorites_json")
 
-    /** Order-insensitive — use for containsKey/membership checks only. */
     val favorites: Flow<Map<String, Favorite>> = context.favDataStore.data.map { prefs ->
         parseFavorites(prefs[KEY])
     }
 
-    /**
-     * Order-sensitive list for UI display.
-     * Emits a new list whenever [move] changes item order,
-     * solving the Map.equals() order-insensitivity bug.
-     */
     val favoritesList: Flow<List<Favorite>> = favorites.map { it.values.toList() }
 
     suspend fun add(favorite: Favorite) {
         context.favDataStore.edit { prefs ->
             val current = parseFavorites(prefs[KEY]).toMutableMap()
             current[favorite.id] = favorite
-            prefs[KEY] = gson.toJson(current)
+            prefs[KEY] = json.encodeToString(current)
         }
     }
 
@@ -43,11 +37,10 @@ class FavoritesStore(private val context: Context) {
         context.favDataStore.edit { prefs ->
             val current = parseFavorites(prefs[KEY]).toMutableMap()
             current.remove(id)
-            prefs[KEY] = gson.toJson(current)
+            prefs[KEY] = json.encodeToString(current)
         }
     }
 
-    /** Move a favorite up (direction=-1) or down (direction=1) in the list. */
     suspend fun move(id: String, direction: Int) {
         context.favDataStore.edit { prefs ->
             val current = parseFavorites(prefs[KEY]).entries.toMutableList()
@@ -59,15 +52,14 @@ class FavoritesStore(private val context: Context) {
             current.add(newIdx, item)
             val reordered = LinkedHashMap<String, Favorite>()
             current.forEach { reordered[it.key] = it.value }
-            prefs[KEY] = gson.toJson(reordered)
+            prefs[KEY] = json.encodeToString(reordered)
         }
     }
 
-    private fun parseFavorites(json: String?): Map<String, Favorite> {
-        if (json.isNullOrBlank()) return emptyMap()
+    private fun parseFavorites(data: String?): Map<String, Favorite> {
+        if (data.isNullOrBlank()) return emptyMap()
         return try {
-            val type = object : TypeToken<Map<String, Favorite>>() {}.type
-            gson.fromJson(json, type) ?: emptyMap()
+            json.decodeFromString<Map<String, Favorite>>(data)
         } catch (e: Exception) {
             emptyMap()
         }

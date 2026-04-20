@@ -1,17 +1,17 @@
 package com.rizzoplayer.iptv.data.api
 
 import android.content.Context
-import com.google.gson.Gson
 import com.rizzoplayer.iptv.data.model.TorrentioResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import okhttp3.Request
 
 class TorrentioService(context: Context) {
 
     private val client = NetworkClient.base(context)
 
-    private val gson = Gson()
+    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true }
     private val baseUrl = "https://torrentio.strem.fun"
 
     private suspend fun get(endpoint: String): TorrentioResponse = withContext(Dispatchers.IO) {
@@ -20,7 +20,7 @@ class TorrentioService(context: Context) {
             .build()
         client.newCall(request).execute().use { response ->
             val body = response.body?.string() ?: throw Exception("Empty body")
-            gson.fromJson(body, TorrentioResponse::class.java)
+            json.decodeFromString<TorrentioResponse>(body)
         }
     }
 

@@ -2,18 +2,17 @@ package com.rizzoplayer.iptv.data.api
 
 import android.content.Context
 import android.util.Base64
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.rizzoplayer.iptv.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import okhttp3.Request
 
 class IPTVApiService(context: Context) {
 
     private val client = NetworkClient.iptx(context)
 
-    private val gson = Gson()
+    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true }
 
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).build()
@@ -54,8 +53,8 @@ class IPTVApiService(context: Context) {
 
     suspend fun testConnection(baseUrl: String, u: String, p: String): Boolean {
         return try {
-            val json = get(apiUrl(baseUrl, u, p, "get_live_categories"))
-            json.trimStart().startsWith("[") || json.trimStart().startsWith("{")
+            val text = get(apiUrl(baseUrl, u, p, "get_live_categories"))
+            text.trimStart().startsWith("[") || text.trimStart().startsWith("{")
         } catch (e: Exception) {
             false
         }
@@ -68,19 +67,18 @@ class IPTVApiService(context: Context) {
     }
 
     private suspend inline fun <reified T> fetchList(url: String): List<T> {
-        val json = get(url)
+        val text = get(url)
         return try {
-            val type = TypeToken.getParameterized(List::class.java, T::class.java).type
-            gson.fromJson(json, type) ?: emptyList()
+            json.decodeFromString(text)
         } catch (e: Exception) {
             emptyList()
         }
     }
 
     private suspend inline fun <reified T> fetchObject(url: String): T? {
-        val json = get(url)
+        val text = get(url)
         return try {
-            gson.fromJson(json, T::class.java)
+            json.decodeFromString<T>(text)
         } catch (e: Exception) {
             null
         }

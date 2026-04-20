@@ -1,12 +1,17 @@
 package com.rizzoplayer.iptv.data.api
 
 import android.content.Context
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.rizzoplayer.iptv.BuildConfig
 import com.rizzoplayer.iptv.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -32,7 +37,11 @@ class TmdbApiService(context: Context) {
         }
         .build()
 
-    private val gson = Gson()
+    private val json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+        isLenient = true
+    }
     private val baseUrl = "https://api.themoviedb.org/3"
 
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
@@ -98,10 +107,9 @@ class TmdbApiService(context: Context) {
 
     private suspend inline fun <reified T> fetchPage(url: String): TmdbPage<T> =
         withContext(Dispatchers.IO) {
-            val json = get(url)
+            val text = get(url)
             try {
-                val type = TypeToken.getParameterized(TmdbPage::class.java, T::class.java).type
-                gson.fromJson<TmdbPage<T>>(json, type) ?: TmdbPage(emptyList(), 1, 1)
+                json.decodeFromString<TmdbPage<T>>(text)
             } catch (e: Exception) {
                 TmdbPage(emptyList(), 1, 1)
             }
@@ -109,7 +117,7 @@ class TmdbApiService(context: Context) {
 
     private suspend inline fun <reified T> fetchObject(url: String): T? =
         withContext(Dispatchers.IO) {
-            val json = get(url)
-            try { gson.fromJson(json, T::class.java) } catch (e: Exception) { null }
+            val text = get(url)
+            try { json.decodeFromString<T>(text) } catch (e: Exception) { null }
         }
 }

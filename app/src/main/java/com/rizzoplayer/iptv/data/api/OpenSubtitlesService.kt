@@ -1,6 +1,8 @@
 package com.rizzoplayer.iptv.data.api
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import okhttp3.Request
 
 class OpenSubtitlesService(
@@ -9,6 +11,7 @@ class OpenSubtitlesService(
     baseUrl: String = "https://api.opensubtitles.com/api/v1"
 ) {
     private val client = NetworkClient.opensubtitles(context, apiKey)
+    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true }
     private val baseUrl = baseUrl.trimEnd('/')
 
     data class SubtitleSearchResult(
@@ -20,37 +23,42 @@ class OpenSubtitlesService(
         val hd: Boolean
     )
 
+    @Serializable
     data class SearchResponse(
-        @SerializedName("data") val data: List<SubtitleResult>
+        val data: List<SubtitleResult> = emptyList()
     )
 
+    @Serializable
     data class SubtitleResult(
-        @SerializedName("id") val id: String,
-        @SerializedName("type") val type: String,
-        @SerializedName("attributes") val attributes: SubtitleAttributes
+        val id: String,
+        val type: String,
+        val attributes: SubtitleAttributes
     )
 
+    @Serializable
     data class SubtitleAttributes(
-        @SerializedName("files") val files: List<SubtitleFile>
+        val files: List<SubtitleFile> = emptyList()
     )
 
+    @Serializable
     data class SubtitleFile(
-        @SerializedName("file_id") val fileId: String,
-        @SerializedName("filename") val filename: String,
-        @SerializedName("cd_number") val cdNumber: Int,
-        @SerializedName("release") val release: String?,
-        @SerializedName("language") val language: String,
-        @SerializedName("download_count") val downloadCount: Int?,
-        @SerializedName("hearing_impaired") val hearingImpaired: Boolean?,
-        @SerializedName("hd") val hd: Boolean?,
-        @SerializedName("download_url") val downloadUrl: String?,
-        @SerializedName("files") val files: List<FileLink>?
+        @SerialName("file_id") val fileId: String,
+        val filename: String,
+        @SerialName("cd_number") val cdNumber: Int,
+        val release: String? = null,
+        val language: String,
+        @SerialName("download_count") val downloadCount: Int? = null,
+        @SerialName("hearing_impaired") val hearingImpaired: Boolean? = null,
+        val hd: Boolean? = null,
+        @SerialName("download_url") val downloadUrl: String? = null,
+        val files: List<FileLink>? = null
     )
 
+    @Serializable
     data class FileLink(
-        @SerializedName("file_id") val fileId: String,
-        @SerializedName("cd_number") val cdNumber: Int?,
-        @SerializedName("download_url") val downloadUrl: String?
+        @SerialName("file_id") val fileId: String,
+        @SerialName("cd_number") val cdNumber: Int? = null,
+        @SerialName("download_url") val downloadUrl: String? = null
     )
 
     suspend fun search(
@@ -72,7 +80,7 @@ class OpenSubtitlesService(
             val resp = client.newCall(req).execute()
             val body = resp.body?.string() ?: return emptyList()
 
-            val searchResp = com.google.gson.Gson().fromJson(body, SearchResponse::class.java)
+            val searchResp = json.decodeFromString<SearchResponse>(body)
 
             searchResp.data
                 .filter { it.attributes.files.isNotEmpty() }

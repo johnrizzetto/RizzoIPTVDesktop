@@ -61,8 +61,7 @@ import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Size
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import kotlinx.serialization.json.Json
 import com.rizzoplayer.iptv.RizzoApp
 import com.rizzoplayer.iptv.data.local.PlaybackPositionStore
 import com.rizzoplayer.iptv.data.model.ChannelRef
@@ -261,11 +260,12 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
-    private fun parseChannelRefs(json: String): List<ChannelRef> {
-        if (json.isBlank()) return emptyList()
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+
+    private fun parseChannelRefs(data: String): List<ChannelRef> {
+        if (data.isBlank()) return emptyList()
         return try {
-            val type = object : TypeToken<List<ChannelRef>>() {}.type
-            Gson().fromJson(json, type) ?: emptyList()
+            json.decodeFromString<List<ChannelRef>>(data)
         } catch (_: Exception) { emptyList() }
     }
 

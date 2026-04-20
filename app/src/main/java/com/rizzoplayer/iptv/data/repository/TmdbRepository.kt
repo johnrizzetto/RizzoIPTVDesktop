@@ -1,7 +1,5 @@
 package com.rizzoplayer.iptv.data.repository
 
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.rizzoplayer.iptv.BuildConfig
 import com.rizzoplayer.iptv.data.api.TmdbApiService
 import com.rizzoplayer.iptv.data.api.TorrentioService
@@ -13,22 +11,23 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 class TmdbRepository(
     private val tmdb: TmdbApiService,
     private val torrentio: TorrentioService,
     private val diskCache: DiskCache,
-    private val gson: Gson = Gson()
+    private val json: Json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true }
 ) {
     companion object {
-        const val TTL_CATALOGS = 6 * 60 * 60 * 1000L   // 6 h
-        const val TTL_GENRES   = 7 * 24 * 60 * 60 * 1000L  // 7 d
-        const val TTL_DETAIL  = 24 * 60 * 60 * 1000L // 24 h
-        const val TTL_SEARCH  = 10 * 60 * 1000L       // 10 min
-        const val TTL_TORRENTIO = 20 * 60 * 1000L    // 20 min
+        const val TTL_CATALOGS = 6 * 60 * 60 * 1000L
+        const val TTL_GENRES   = 7 * 24 * 60 * 60 * 1000L
+        const val TTL_DETAIL  = 24 * 60 * 60 * 1000L
+        const val TTL_SEARCH  = 10 * 60 * 1000L
+        const val TTL_TORRENTIO = 20 * 60 * 1000L
     }
 
-    // ── Request coalescing — prevent duplicate in-flight calls ─────────────────
     private val inFlightRequests = java.util.concurrent.ConcurrentHashMap<String, Deferred<Any>>()
 
     @Suppress("UNCHECKED_CAST")
@@ -48,20 +47,15 @@ class TmdbRepository(
         coalesceKey: String? = null,
         crossinline fetch: suspend () -> List<T>
     ): List<T> {
-        diskCache.get(key, ttlMs)?.let { json ->
+        diskCache.get(key, ttlMs)?.let { text ->
             return withContext(Dispatchers.Default) {
-                try {
-                    val type = TypeToken.getParameterized(List::class.java, T::class.java).type
-                    gson.fromJson(json, type) ?: emptyList()
-                } catch (e: Exception) {
-                    emptyList()
-                }
+                try { json.decodeFromString<List<T>>(text) } catch (e: Exception) { emptyList() }
             }
         }
         return try {
             val result = if (coalesceKey != null) coalesced(coalesceKey) { fetch() } else fetch()
-            val json = withContext(Dispatchers.Default) { gson.toJson(result) }
-            diskCache.put(key, json)
+            val text = withContext(Dispatchers.Default) { json.encodeToString(result) }
+            diskCache.put(key, text)
             result
         } catch (e: Exception) {
             emptyList()
@@ -74,15 +68,15 @@ class TmdbRepository(
         coalesceKey: String? = null,
         crossinline fetch: suspend () -> T?
     ): T? {
-        diskCache.get(key, ttlMs)?.let { json ->
+        diskCache.get(key, ttlMs)?.let { text ->
             return withContext(Dispatchers.Default) {
-                try { gson.fromJson(json, T::class.java) } catch (e: Exception) { null }
+                try { json.decodeFromString<T>(text) } catch (e: Exception) { null }
             }
         }
         return try {
             val result = if (coalesceKey != null) coalesced(coalesceKey) { fetch() } else fetch() ?: return null
-            val json = withContext(Dispatchers.Default) { gson.toJson(result) }
-            diskCache.put(key, json)
+            val text = withContext(Dispatchers.Default) { json.encodeToString(result) }
+            diskCache.put(key, text)
             result
         } catch (e: Exception) {
             null
@@ -206,18 +200,15 @@ class TmdbRepository(
     }
 
     private suspend fun cachedTorrentio(key: String, fetch: suspend () -> List<TorrentioStream>): List<TorrentioStream> {
-        diskCache.get(key, TTL_TORRENTIO)?.let { json ->
+        diskCache.get(key, TTL_TORRENTIO)?.let { text ->
             return withContext(Dispatchers.Default) {
-                try {
-                    val type = object : TypeToken<List<TorrentioStream>>() {}.type
-                    gson.fromJson<List<TorrentioStream>>(json, type) ?: emptyList()
-                } catch (e: Exception) { emptyList() }
+                try { json.decodeFromString<List<TorrentioStream>>(text) } catch (e: Exception) { emptyList() }
             }
         }
         return try {
             val result = fetch()
-            val json = withContext(Dispatchers.Default) { gson.toJson(result) }
-            diskCache.put(key, json)
+            val text = withContext(Dispatchers.Default) { json.encodeToString(result) }
+            diskCache.put(key, text)
             result
         } catch (e: Exception) { emptyList() }
     }

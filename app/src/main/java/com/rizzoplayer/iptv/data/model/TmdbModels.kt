@@ -1,96 +1,101 @@
 package com.rizzoplayer.iptv.data.model
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.Serializable
 import androidx.compose.runtime.Immutable
 
 @Immutable
+@Serializable
 data class TmdbGenre(
-    @SerializedName("id")   val id: Int,
-    @SerializedName("name") val name: String
+    @Serializable(with = IntSerializer::class) val id: Int,
+    val name: String
 )
 
-// Wrapper for /genre/movie/list and /genre/tv/list responses: {"genres": [...]}
 @Immutable
+@Serializable
 data class TmdbGenreResponse(
-    @SerializedName("genres") val genres: List<TmdbGenre> = emptyList()
+    val genres: List<TmdbGenre> = emptyList()
 )
 
 @Immutable
+@Serializable
 data class TmdbMovie(
-    @SerializedName("id")            val id: Int,
-    @SerializedName("imdb_id")       val imdbId: String? = null,
-    @SerializedName("title")         val title: String = "",
-    @SerializedName("poster_path")   val posterPath: String? = null,
-    @SerializedName("backdrop_path") val backdropPath: String? = null,
-    @SerializedName("overview")      val overview: String = "",
-    @SerializedName("release_date")  val releaseDate: String = "",
-    @SerializedName("vote_average")  val rating: Float = 0f,
-    @SerializedName("vote_count")    val voteCount: Int = 0,
-    @SerializedName("runtime")       val runtime: Int? = null,
-    @SerializedName("genre_ids")     val genreIds: List<Int> = emptyList()
+    @Serializable(with = IntSerializer::class) val id: Int,
+    val imdbId: String? = null,
+    val title: String = "",
+    val posterPath: String? = null,
+    val backdropPath: String? = null,
+    val overview: String = "",
+    val releaseDate: String = "",
+    val rating: Float = 0f,
+    @Serializable(with = IntSerializer::class) val voteCount: Int = 0,
+    val runtime: Int? = null,
+    val genreIds: List<Int> = emptyList()
 )
 
 @Immutable
+@Serializable
 data class TmdbExternalIds(
-    @SerializedName("imdb_id") val imdbId: String? = null
+    val imdbId: String? = null
 )
 
 @Immutable
+@Serializable
 data class TmdbShow(
-    @SerializedName("id")                val id: Int,
-    @SerializedName("external_ids")      val externalIds: TmdbExternalIds? = null,
-    @SerializedName("name")              val name: String = "",
-    @SerializedName("poster_path")       val posterPath: String? = null,
-    @SerializedName("backdrop_path")     val backdropPath: String? = null,
-    @SerializedName("overview")          val overview: String = "",
-    @SerializedName("first_air_date")    val firstAirDate: String = "",
-    @SerializedName("vote_average")      val rating: Float = 0f,
-    @SerializedName("vote_count")        val voteCount: Int = 0,
-    @SerializedName("number_of_seasons") val numberOfSeasons: Int = 0,
-    @SerializedName("genre_ids")         val genreIds: List<Int> = emptyList()
+    @Serializable(with = IntSerializer::class) val id: Int,
+    val externalIds: TmdbExternalIds? = null,
+    val name: String = "",
+    val posterPath: String? = null,
+    val backdropPath: String? = null,
+    val overview: String = "",
+    val firstAirDate: String = "",
+    val rating: Float = 0f,
+    @Serializable(with = IntSerializer::class) val voteCount: Int = 0,
+    @Serializable(with = IntSerializer::class) val numberOfSeasons: Int = 0,
+    val genreIds: List<Int> = emptyList()
 ) {
     val imdbId: String? get() = externalIds?.imdbId
 }
 
 @Immutable
+@Serializable
 data class TmdbSeason(
-    @SerializedName("season_number")  val seasonNumber: Int = 0,
-    @SerializedName("name")           val name: String = "",
-    @SerializedName("episode_count")  val episodeCount: Int = 0,
-    @SerializedName("episodes")       val episodes: List<TmdbEpisode> = emptyList()
+    @Serializable(with = IntSerializer::class) val seasonNumber: Int = 0,
+    val name: String = "",
+    @Serializable(with = IntSerializer::class) val episodeCount: Int = 0,
+    val episodes: List<TmdbEpisode> = emptyList()
 )
 
 @Immutable
+@Serializable
 data class TmdbEpisode(
-    @SerializedName("id")             val id: Int,
-    @SerializedName("episode_number") val episodeNumber: Int = 0,
-    @SerializedName("season_number")  val seasonNumber: Int = 0,
-    @SerializedName("air_date")       val airDate: String? = null,
-    @SerializedName("name")           val name: String = "",
-    @SerializedName("overview")       val overview: String = "",
-    @SerializedName("still_path")     val stillPath: String? = null,
-    @SerializedName("runtime")        val runtime: Int? = null
+    @Serializable(with = IntSerializer::class) val id: Int,
+    @Serializable(with = IntSerializer::class) val episodeNumber: Int = 0,
+    @Serializable(with = IntSerializer::class) val seasonNumber: Int = 0,
+    val airDate: String? = null,
+    val name: String = "",
+    val overview: String = "",
+    val stillPath: String? = null,
+    val runtime: Int? = null
 )
 
-/**
- * Generic response wrapper for paginated TMDB lists.
- * Note: Gson requires a TypeToken to deserialize generic types correctly.
- */
 @Immutable
+@Serializable
 data class TmdbPage<T>(
-    @SerializedName("results")     val results: List<T> = emptyList(),
-    @SerializedName("page")        val page: Int = 1,
-    @SerializedName("total_pages") val totalPages: Int = 1
+    val results: List<T> = emptyList(),
+    @Serializable(with = IntSerializer::class) val page: Int = 1,
+    @Serializable(with = IntSerializer::class) val totalPages: Int = 1
 )
 
 @Immutable
+@Serializable
 data class TorrentioStream(
-    @SerializedName("url")   val url: String = "",
-    @SerializedName("title") val title: String = "", // e.g. quality info, torrent name + size
-    @SerializedName("name")  val name: String = ""   // addon source, e.g. "[TB+] Torrentio\n4k DV"
+    val url: String = "",
+    val title: String = "",
+    val name: String = ""
 )
 
 @Immutable
+@Serializable
 data class TorrentioResponse(
-    @SerializedName("streams") val streams: List<TorrentioStream> = emptyList()
+    val streams: List<TorrentioStream> = emptyList()
 )

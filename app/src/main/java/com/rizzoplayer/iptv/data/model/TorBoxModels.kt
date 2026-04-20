@@ -1,47 +1,61 @@
 package com.rizzoplayer.iptv.data.model
 
-import com.google.gson.JsonElement
-import com.google.gson.JsonNull
-import com.google.gson.JsonObject
-import com.google.gson.JsonPrimitive
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
+@Serializable
 data class TorBoxAddResult(
-    @SerializedName("success") val success: Boolean = false,
-    @SerializedName("detail")  val detail: String? = null,
-    @SerializedName("error")   val error: String? = null,
-    @SerializedName("data")    val data: JsonElement? = null
+    val success: Boolean = false,
+    val detail: String? = null,
+    val error: String? = null,
+    val data: JsonElement? = null
 ) {
-    val torrentId: Int? get() = when {
-        data == null || data is JsonNull -> null
-        data is JsonObject -> data.get("torrent_id")?.asInt ?: data.get("id")?.asInt
-        else -> null
+    val torrentId: Int? get() {
+        val d = data ?: return null
+        if (d is JsonObject) {
+            val tid = d["torrent_id"]
+            if (tid is JsonPrimitive && tid.isString) return tid.content.toIntOrNull()
+            val i = d["id"]
+            if (i is JsonPrimitive && i.isString) return i.content.toIntOrNull()
+        }
+        return null
     }
-    val hash: String? get() = when {
-        data == null || data is JsonNull -> null
-        data is JsonObject -> data.get("hash")?.asString
-        data is JsonPrimitive -> data.asString
-        else -> null
+    val hash: String? get() {
+        val d = data ?: return null
+        return when (d) {
+            is JsonObject -> {
+                val h = d["hash"]
+                if (h is JsonPrimitive) h.content else null
+            }
+            is JsonPrimitive -> d.content
+            else -> null
+        }
     }
     val message: String? get() = error ?: detail
 }
 
+@Serializable
 data class TorBoxFile(
-    @SerializedName("id")   val id: Int,
-    @SerializedName("name") val name: String,
-    @SerializedName("size") val size: Long
+    val id: Int,
+    val name: String,
+    val size: Long
 )
 
+@Serializable
 data class TorBoxTorrent(
-    @SerializedName("id")                val torrentId: Int,
-    @SerializedName("name")              val name: String,
-    @SerializedName("hash")              val hash: String,
-    @SerializedName("size")             val size: Long = 0,
-    @SerializedName("progress")          val progress: Double = 0.0,
-    @SerializedName("download_finished")  val downloadFinished: Boolean = false,
-    @SerializedName("download_state")     val downloadState: String = "",
-    @SerializedName("cached")            val cached: Boolean = false,
-    @SerializedName("files")            val files: List<TorBoxFile> = emptyList()
+    @SerialName("id") val torrentId: Int,
+    @SerialName("name") val name: String,
+    val hash: String,
+    val size: Long = 0,
+    val progress: Double = 0.0,
+    @SerialName("download_finished") val downloadFinished: Boolean = false,
+    @SerialName("download_state") val downloadState: String = "",
+    val cached: Boolean = false,
+    val files: List<TorBoxFile> = emptyList()
 ) {
     val isCompleted: Boolean get() = downloadFinished || downloadState == "cached" || cached
     val percentDone: Double get() = progress.coerceIn(0.0, 1.0)
