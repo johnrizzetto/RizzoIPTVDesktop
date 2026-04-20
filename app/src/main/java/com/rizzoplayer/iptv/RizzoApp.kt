@@ -9,6 +9,10 @@ import coil.memory.MemoryCache
 import com.rizzoplayer.iptv.data.api.NetworkClient
 import com.rizzoplayer.iptv.data.local.PlaybackPositionStore
 import com.rizzoplayer.iptv.data.local.PreferencesStore
+import com.rizzoplayer.iptv.ui.player.PlayerPool
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class RizzoApp : Application() {
 
@@ -53,5 +57,10 @@ class RizzoApp : Application() {
                 "image.tmdb.org"
             )
         )
+
+        // Warm up ExoPlayer pool off-main before first playback
+        CoroutineScope(Dispatchers.IO).launch {
+            PlayerPool.warmUp(applicationContext)
+        }
     }
 }

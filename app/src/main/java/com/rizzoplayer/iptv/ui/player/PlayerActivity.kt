@@ -144,21 +144,12 @@ class PlayerActivity : ComponentActivity() {
         val recentChannels: List<ChannelRef> = parseChannelRefs(recentJson)
         val favoriteChannels: List<ChannelRef> = parseChannelRefs(favJson)
 
-        // Buffer config: VOD gets larger buffers for smooth playback
-        val loadControl = if (isVod) {
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(15_000, 90_000, 5_000, 10_000)
-                .build()
+        player = if (isVod) {
+            PlayerPool.buildVodPlayer(this)
         } else {
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(2_500, 12_000, 1_000, 2_000)
-                .build()
-        }
-
-        player = ExoPlayer.Builder(this)
-            .setLoadControl(loadControl)
-            .build().apply {
-                setMediaItem(MediaItem.fromUri(currentUrl))
+            PlayerPool.acquireLive(this)
+        }.apply {
+            setMediaItem(MediaItem.fromUri(currentUrl))
                 prepare()
                 if (resumeMs > 60_000L) {
                     // Let resume dialog choose position; don't auto-seek here
@@ -491,7 +482,7 @@ class PlayerActivity : ComponentActivity() {
         positionSaveJob?.cancel()
         player?.let { p ->
             savePositionNow()
-            p.release()
+            PlayerPool.release(p)
         }
         player = null
         retryJob?.cancel()
