@@ -192,6 +192,8 @@ class PlayerActivity : ComponentActivity() {
         startPositionTracking()
 
         // Subscribe to live favorites from DataStore
+        // Read directly from DataStore — PlayerActivity has no parent ViewModel scope
+        // to inherit from. Write path still goes through MainViewModel.toggleFavorite().
         lifecycleScope.launch {
             FavoritesStore(this@PlayerActivity).favorites
                 .collect { map -> liveFavoriteIds.value = map.keys }
