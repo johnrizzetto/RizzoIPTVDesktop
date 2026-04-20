@@ -301,6 +301,7 @@ class MainViewModel(
     private val backStack = ArrayDeque<Pair<BrowseContent, Int>>()
     private val preloaded = mutableSetOf<Section>()
     private var lastLoadBlock: (suspend (Credentials) -> BrowseContent)? = null
+    private var lastTmdbBlock: (suspend () -> BrowseContent)? = null
     private var playbackPrepJob: Job? = null
 
     private val recentUrlCache = mutableMapOf<String, String>() // id → url
@@ -578,15 +579,31 @@ class MainViewModel(
      */
     fun retryReload() {
         _state.update { it.copy(error = null) }
-        val block = lastLoadBlock ?: return selectSection(_state.value.section)
-        val creds = _state.value.credentials ?: return
-        viewModelScope.launch {
-            try {
-                val content = withContext(Dispatchers.IO) { block(creds) }
-                _state.update { it.copy(isLoading = false, content = content, canGoBack = backStack.isNotEmpty()) }
-            } catch (e: Exception) {
-                _state.update { it.copy(isLoading = false, error = e.message ?: "Unknown error") }
+        val tmdbBlock = lastTmdbBlock
+        val liveBlock = lastLoadBlock
+        when {
+            tmdbBlock != null -> {
+                viewModelScope.launch {
+                    try {
+                        val content = withContext(Dispatchers.IO) { tmdbBlock() }
+                        _state.update { it.copy(isLoading = false, content = content, canGoBack = backStack.isNotEmpty()) }
+                    } catch (e: Exception) {
+                        _state.update { it.copy(isLoading = false, error = e.message ?: "Unknown error") }
+                    }
+                }
             }
+            liveBlock != null -> {
+                val creds = _state.value.credentials ?: return
+                viewModelScope.launch {
+                    try {
+                        val content = withContext(Dispatchers.IO) { liveBlock(creds) }
+                        _state.update { it.copy(isLoading = false, content = content, canGoBack = backStack.isNotEmpty()) }
+                    } catch (e: Exception) {
+                        _state.update { it.copy(isLoading = false, error = e.message ?: "Unknown error") }
+                    }
+                }
+            }
+            else -> selectSection(_state.value.section)
         }
     }
 
@@ -1071,6 +1088,7 @@ class MainViewModel(
     }
 
     private fun loadTmdb(pushBack: Boolean = false, block: suspend () -> BrowseContent) {
+        lastTmdbBlock = block
         _state.update { it.copy(isLoading = true, error = null, searchQuery = "") }
         viewModelScope.launch {
             try {
