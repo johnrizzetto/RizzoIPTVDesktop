@@ -7,7 +7,6 @@ import android.util.Rational
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.activity.viewModels
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -70,6 +69,7 @@ import com.rizzoplayer.iptv.data.model.Favorite
 import com.rizzoplayer.iptv.data.local.FavoritesStore
 import com.rizzoplayer.iptv.ui.viewmodel.MainViewModel
 import com.rizzoplayer.iptv.ui.theme.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,7 +92,6 @@ class PlayerActivity : ComponentActivity() {
     // Content identification for persistent positions
     private var contentId: String = ""
     private var contentType: String = "live"
-    private val viewModel: MainViewModel by viewModels()
     private val liveFavoriteIds = mutableStateOf<Set<String>>(emptySet())
 
     // Episode auto-advance
@@ -224,8 +223,7 @@ class PlayerActivity : ComponentActivity() {
                 onRetrySetup     = { retryJob = it },
                 onBack           = ::finish,
                 onVodPlaybackError = ::onVodPlaybackError,
-                onSwitchChannel  = { newUrl, _ -> currentUrl = newUrl },
-                viewModel        = viewModel
+                onSwitchChannel  = { newUrl, _ -> currentUrl = newUrl }
             )
         }
     }
@@ -559,8 +557,7 @@ private fun PlayerScreen(
     playerError: State<String?>,
     onDismissError: () -> Unit,
     onPlayerError: (String) -> Unit,
-    onVodPlaybackError: () -> Unit,
-    viewModel: MainViewModel
+    onVodPlaybackError: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val appContext = LocalContext.current.applicationContext
@@ -795,8 +792,11 @@ private fun PlayerScreen(
                     isCurrentlyFavorited = liveFavoriteIds.value.contains(contentId),
                     requestFocus     = requestOverlayFocus,
                     onSwitchChannel  = switchChannel,
-                    onToggleFavorite = { id, title, _ ->
-                        viewModel.toggleFavorite(id, title, "live")
+                    onToggleFavorite = { id, title, isFav ->
+                        scope.launch(Dispatchers.IO) {
+                            val store = FavoritesStore(appContext)
+                            if (isFav) store.remove(id) else store.add(Favorite(id, title, "live"))
+                        }
                     }
                 )
             }
