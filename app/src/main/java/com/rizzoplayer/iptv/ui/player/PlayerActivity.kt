@@ -68,6 +68,8 @@ import com.rizzoplayer.iptv.data.model.ChannelRef
 import com.rizzoplayer.iptv.ui.theme.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -113,6 +115,11 @@ class PlayerActivity : ComponentActivity() {
     private var recentChannelsJob: Job? = null
     private var retryJob: Job? = null
     private var vodControlsJob: Job? = null
+    private var positionSaveJob: Job? = null
+
+    // Batch position save — MutableStateFlow polled every 250ms, saves every 5s
+    private val _positionFlow = MutableStateFlow(0L)
+    private var lastSaveTimeMs = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -143,7 +150,7 @@ class PlayerActivity : ComponentActivity() {
                 .build()
         } else {
             DefaultLoadControl.Builder()
-                .setBufferDurationsMs(1_500, 12_000, 1_000, 2_000)
+                .setBufferDurationsMs(2_500, 12_000, 1_000, 2_000)
                 .build()
         }
 
@@ -162,24 +169,30 @@ class PlayerActivity : ComponentActivity() {
                 // Episode auto-advance listener
                 addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (playbackState == Player.STATE_ENDED && nextUrl.isNotEmpty()) {
-                            showNextEpisode.value = true
-                            nextCountdown.intValue = 5
-                            countdownJob?.cancel()
-                            countdownJob = lifecycleScope.launch {
-                                for (i in 5 downTo 0) {
-                                    nextCountdown.intValue = i
-                                    if (i == 0) {
-                                        advanceToNextEpisode()
-                                        return@launch
+                        if (playbackState == Player.STATE_ENDED) {
+                            savePositionNow()
+                            if (nextUrl.isNotEmpty()) {
+                                showNextEpisode.value = true
+                                nextCountdown.intValue = 5
+                                countdownJob?.cancel()
+                                countdownJob = lifecycleScope.launch {
+                                    for (i in 5 downTo 0) {
+                                        nextCountdown.intValue = i
+                                        if (i == 0) {
+                                            advanceToNextEpisode()
+                                            return@launch
+                                        }
+                                        delay(1_000)
                                     }
-                                    delay(1_000)
                                 }
                             }
                         }
                     }
                 })
             }
+
+        // Start periodic position tracking + batch save (every 5s)
+        startPositionTracking()
 
         setContent {
             PlayerScreen(
@@ -227,6 +240,35 @@ class PlayerActivity : ComponentActivity() {
         finish()
     }
 
+    /** Save current position to PlaybackPositionStore immediately (batches writes every 5s). */
+    private fun savePositionNow() {
+        val p = player ?: return
+        if (contentId.isEmpty()) return
+        val key = "${contentType}:${contentId}"
+        val positionMs = p.currentPosition
+        val durationMs = p.duration.coerceAtLeast(0)
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            (application as RizzoApp).playbackPositionStore
+                .saveAsync(key, positionMs, durationMs)
+        }
+    }
+
+    /** Start periodic position tracking: emit position every 250ms, save every 5s. */
+    private fun startPositionTracking() {
+        positionSaveJob?.cancel()
+        positionSaveJob = lifecycleScope.launch {
+            while (true) {
+                _positionFlow.value = player?.currentPosition ?: 0L
+                val now = System.currentTimeMillis()
+                if (now - lastSaveTimeMs >= 5_000) {
+                    lastSaveTimeMs = now
+                    savePositionNow()
+                }
+                delay(250)
+            }
+        }
+    }
+
     private fun parseChannelRefs(json: String): List<ChannelRef> {
         if (json.isBlank()) return emptyList()
         return try {
@@ -255,21 +297,11 @@ class PlayerActivity : ComponentActivity() {
     private fun handleVodKey(event: KeyEvent): Boolean {
         val p = player ?: return super.dispatchKeyEvent(event)
 
-        // ── When track picker is open: LEFT/RIGHT seek, BACK closes, all else goes to Compose ──
+        // ── When track picker is open: BACK closes, LEFT/RIGHT pass to Compose LazyRow ──
         if (showTrackPicker.value) {
             return when (event.keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
                     showTrackPicker.value = false
-                    true
-                }
-                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    val seekMs = if (event.repeatCount > 0) 30_000L else 10_000L
-                    p.seekTo((p.currentPosition - seekMs).coerceAtLeast(0))
-                    true
-                }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    val seekMs = if (event.repeatCount > 0) 30_000L else 10_000L
-                    p.seekTo(p.currentPosition + seekMs)
                     true
                 }
                 else -> super.dispatchKeyEvent(event)
@@ -438,6 +470,11 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        savePositionNow()
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -450,17 +487,9 @@ class PlayerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        positionSaveJob?.cancel()
         player?.let { p ->
-            // Save position + duration to persistent PlaybackPositionStore
-            if (contentId.isNotEmpty()) {
-                val key = "${contentType}:${contentId}"
-                val positionMs = p.currentPosition
-                val durationMs = p.duration.coerceAtLeast(0)
-                lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                    (application as RizzoApp).playbackPositionStore
-                        .saveAsync(key, positionMs, durationMs)
-                }
-            }
+            savePositionNow()
             p.release()
         }
         player = null
@@ -634,8 +663,6 @@ private fun PlayerScreen(
             override fun onTracksChanged(tracks: Tracks) {
                 audioTracks.clear()
                 textTracks.clear()
-                selectedAudioGroupIdx = null
-                selectedTextGroupIdx = null
                 tracks.groups.forEachIndexed { groupIdx, group ->
                     when (group.type) {
                         C.TRACK_TYPE_AUDIO -> {
@@ -1240,15 +1267,25 @@ private fun TrackChip(
             .clip(RoundedCornerShape(8.dp))
             .background(
                 when {
-                    isActive && isSelected -> Color(0xFF00CFFF).copy(alpha = 0.25f)
-                    isActive -> Color(0xFF162040)
+                    focused && isSelected -> Color(0xFF00CFFF).copy(alpha = 0.35f)
+                    focused -> Color(0xFF162040)
+                    isSelected -> Color(0xFF0D2A45)
                     else -> Color(0xFF0D1525)
                 }
             )
             .then(
-                if (isActive) Modifier.border(
-                    if (isSelected) 1.5.dp else 1.dp,
-                    if (isSelected) Color(0xFF00CFFF) else Color(0xFF4D8EFF).copy(alpha = 0.6f),
+                if (focused || isSelected) Modifier.border(
+                    when {
+                        focused && isSelected -> 2.dp
+                        isSelected -> 1.5.dp
+                        else -> 1.dp
+                    },
+                    when {
+                        focused && isSelected -> Color(0xFF00CFFF)
+                        isSelected -> Color(0xFF00CFFF).copy(alpha = 0.8f)
+                        focused -> Color(0xFF4D8EFF).copy(alpha = 0.7f)
+                        else -> Color.Transparent
+                    },
                     RoundedCornerShape(8.dp)
                 ) else Modifier
             )
@@ -1263,7 +1300,7 @@ private fun TrackChip(
         ) {
             Text(
                 label,
-                color = if (isActive) Color.White else Color.White.copy(alpha = 0.55f),
+                color = if (isSelected) Color.White else if (focused) Color.White else Color.White.copy(alpha = 0.55f),
                 fontSize = 14.sp
             )
             if (isSelected) {
@@ -1456,7 +1493,6 @@ private fun TrackPickerPanel(
                     .focusRequester(progressFocus)
                     .focusProperties {
                         down = audioFocus
-                        up = speedFocus
                     }
                     .focusable()
             ) {
@@ -1525,7 +1561,7 @@ private fun TrackPickerPanel(
                     .fillMaxWidth()
                     .focusRequester(subtitleFocus)
                     .focusProperties {
-                        down = qualityFocus
+                        down = progressFocus
                         up = audioFocus
                     }
             ) {
@@ -1542,64 +1578,6 @@ private fun TrackPickerPanel(
                 }
             }
 
-            // Section 4: Quality
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .focusRequester(qualityFocus)
-                    .focusProperties {
-                        down = speedFocus
-                        up = subtitleFocus
-                    }
-            ) {
-                Column {
-                    Text(
-                        "QUALITY",
-                        color = Color(0xFF00CFFF),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.5.sp,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
-                    )
-                    QualityRow(qualityOptions, selectedQualityIdx) { idx ->
-                        val maxHeight = qualityOptions[idx]
-                        player.trackSelectionParameters = player.trackSelectionParameters
-                            .buildUpon()
-                            .apply {
-                                if (maxHeight != null) setMaxVideoSize(Int.MAX_VALUE, maxHeight)
-                                else setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
-                            }
-                            .build()
-                        onSelectQuality(idx)
-                    }
-                }
-            }
-
-            // Section 5: Speed
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .focusRequester(speedFocus)
-                    .focusProperties {
-                        down = progressFocus
-                        up = qualityFocus
-                    }
-            ) {
-                Column {
-                    Text(
-                        "PLAYBACK SPEED",
-                        color = Color(0xFF00CFFF),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.5.sp,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
-                    )
-                    SpeedRow(speedOptions, selectedSpeedIdx) { idx ->
-                        player.setPlaybackSpeed(speedOptions[idx])
-                        onSelectSpeed(idx)
-                    }
-                }
-            }
         }
     }
 }
