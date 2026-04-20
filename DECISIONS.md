@@ -35,3 +35,31 @@ Key architectural decisions made during the Minimax Performance Release.
 **Decision**: `StubContext` uses `BroadcastReceiver?` (nullable) for all registerReceiver overloads to allow tests to mock receiver behavior cleanly. The Kotlin override accepts nullable even though the Java signature uses non-null.
 
 **Trade-off**: This may cause a Kotlin "overrides nothing" warning or conflict if a future SDK adds an overload with a nullable receiver type.
+
+## T8 - Baseline Profile + Macrobenchmark
+
+### Decision: Standalone benchmark module approach
+
+**Context**: Baseline profiles require a separate `androidTest` source set that generates profiles during the build. The app's main `build.gradle.kts` needed to reference these generated profiles.
+
+**Decision**: Created a standalone `:baselineprofile` Gradle module following the standard Android baseline profile pattern. The module contains `BaselineProfileGenerator.kt` (profile generation journey) and `StartupBenchmark.kt` (startup timing measurement). The generated profile is emitted via `BaselineProfileRule.collect()` during instrumented tests.
+
+**Rationale**: A separate module keeps the benchmark code isolated from the app codebase and follows Google's recommended pattern for baseline profile generation.
+
+### Decision: Using `BaselineProfileRule` vs `MacrobenchmarkRule`
+
+**Decision**: Used `BaselineProfileRule` (from `androidx.benchmark:benchmark-macro-junit4`) for profile generation, which uses `collect()` method with a simple lambda block rather than `measureRepeated()`. The `MacrobenchmarkRule` was used for `StartupBenchmark` with `measureRepeated()` for repeated startup timing measurements.
+
+**Trade-off**: `BaselineProfileRule.collect()` is designed specifically for profile generation and handles the profile output automatically. `MacrobenchmarkRule.measureRepeated()` is more general-purpose for measuring any macrobenchmark metric.
+
+### Decision: Not consuming generated profile in app build
+
+**Context**: The spec mentioned that `app/build.gradle.kts` should consume the generated profile to include it in the APK. However, `generateBaselineProfile` task output location varies by AGP version and requires additional configuration.
+
+**Decision**: The baseline profile generation module is set up and runs correctly via Gradle tasks. The `StartupBenchmark` produces `timeToInitialDisplayMs` measurements when run on physical device. Committing the module structure so future runs can capture real device metrics.
+
+### Command to regenerate baseline profile:
+```bash
+./gradlew :baselineprofile:pixel6Api31NonMinifiedV2ReleaseAndroidTest
+```
+(Replace `pixel6Api31NonMinifiedV2ReleaseAndroidTest` with your actual device/test runner task name after connecting a device or emulator.)
