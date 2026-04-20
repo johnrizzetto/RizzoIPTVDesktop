@@ -1,0 +1,49 @@
+{
+  "baseline": {
+    "coldStartMs": 4100,
+    "apkSizeMb": 21,
+    "methodRefs": 20214,
+    "scrollJankPct": null,
+    "scrollJankNote": "Fire TV device disconnected before measurement - unable to capture frame stats"
+  },
+  "tasks": {
+    "T1_shared_okhttp": {
+      "status": "DONE",
+      "commit": "e1cff9a",
+      "improvement": "Shared OkHttpClient across IPTV/TMDB/TorBox/Trakt services; connection prewarm on initialization; cache directory deduplication",
+      "evidence": [
+        "compileV2DebugUnitTestKotlin: PASS",
+        "testV2DebugUnitTest (OpenSubtitlesServiceTest, SharedHttpClientTest): 9 tests PASS",
+        "NetworkClient.kt: baseClient(), iptx(), opensubtitles() all delegate to shared cache + pool"
+      ]
+    },
+    "T2_log_strip": {
+      "status": "pending",
+      "improvement": null
+    },
+    "T3_coil_memory": {
+      "status": "pending",
+      "improvement": null
+    },
+    "T4_exoplayer_pool": {
+      "status": "pending",
+      "improvement": null
+    },
+    "T5_speculative_resolution": {
+      "status": "pending",
+      "improvement": null
+    },
+    "T6_cache_policy": {
+      "status": "pending",
+      "improvement": null
+    },
+    "T7_kotlinx_serialization": {
+      "status": "pending",
+      "improvement": null
+    },
+    "T8_baseline_profile": {
+      "status": "pending",
+      "improvement": null
+    }
+  }
+}
