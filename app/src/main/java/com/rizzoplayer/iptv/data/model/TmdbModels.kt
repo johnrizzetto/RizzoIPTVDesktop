@@ -1,5 +1,6 @@
 package com.rizzoplayer.iptv.data.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import androidx.compose.runtime.Immutable
 
@@ -26,7 +27,7 @@ data class TmdbMovie(
     val backdropPath: String? = null,
     val overview: String = "",
     val releaseDate: String = "",
-    val rating: Float = 0f,
+    @SerialName("vote_average") val rating: Float = 0f,
     @Serializable(with = IntSerializer::class) val voteCount: Int = 0,
     val runtime: Int? = null,
     val genreIds: List<Int> = emptyList()
@@ -48,7 +49,7 @@ data class TmdbShow(
     val backdropPath: String? = null,
     val overview: String = "",
     val firstAirDate: String = "",
-    val rating: Float = 0f,
+    @SerialName("vote_average") val rating: Float = 0f,
     @Serializable(with = IntSerializer::class) val voteCount: Int = 0,
     @Serializable(with = IntSerializer::class) val numberOfSeasons: Int = 0,
     val genreIds: List<Int> = emptyList()

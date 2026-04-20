@@ -5,7 +5,9 @@ import com.rizzoplayer.iptv.BuildConfig
 import com.rizzoplayer.iptv.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNamingStrategy
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
@@ -16,6 +18,7 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 
+@OptIn(ExperimentalSerializationApi::class)
 class TmdbApiService(context: Context) {
 
     private val client = NetworkClient.base(context).newBuilder()
@@ -41,6 +44,7 @@ class TmdbApiService(context: Context) {
         ignoreUnknownKeys = true
         coerceInputValues = true
         isLenient = true
+        namingStrategy = JsonNamingStrategy.SnakeCase
     }
     private val baseUrl = "https://api.themoviedb.org/3"
 
