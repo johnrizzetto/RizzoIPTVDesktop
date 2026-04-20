@@ -2,9 +2,9 @@
   "timestamp": "2026-04-20T00:35:00Z",
   "git": {
     "starting_sha": "defeca8",
-    "ending_sha": "753ce7b2e760fd3a171b2342fa100f430481afd8",
+    "ending_sha": "637d2a6547242ca3bf4ee221eb03cfdb2325c6ad",
     "commits_added": 8,
-    "commit_shas": ["ca0b32d0b9f8a4ae70fb56e437e14f1e28dda194", "9833da3449511b794dec583d86a7308ff41aa5de", "4133efe45c73004f9ee3b14abdf1d4b6eade483e", "b55cc8994ec5622daef33e4cb6bb08852fe922a3", "eb49d0f060c801d85fdd5b85eb2a7a61913b9ba6", "9d0ef00bd7e5bc209ab5cd6d06d6576a3dcce88c", "a1d4256f85b8a6e66bc8866afab806958bebedbb", "753ce7b2e760fd3a171b2342fa100f430481afd8"]
+    "commit_shas": ["ca0b32d0b9f8a4ae70fb56e437e14f1e28dda194", "9833da3449511b794dec583d86a7308ff41aa5de", "4133efe45c73004f9ee3b14abdf1d4b6eade483e", "b55cc8994ec5622daef33e4cb6bb08852fe922a3", "eb49d0f060c801d85fdd5b85eb2a7a61913b9ba6", "9d0ef00bd7e5bc209ab5cd6d06d6576a3dcce88c", "a1d4256f85b8a6e66bc8866afab806958bebedbb", "637d2a6547242ca3bf4ee221eb03cfdb2325c6ad"]
   },
   "build": {
     "assembleV2Debug": "PASS",
@@ -93,7 +93,7 @@
     "T8_baseline_profile": {
       "status": "BLOCKED",
       "reason": "macrobenchmark requires connected physical device or emulator to run :baselineprofile:*AndroidTest tasks and capture timeToInitialDisplayMs. baseline-prof.txt placeholder committed; harness is in place.",
-      "commit": "753ce7b2e760fd3a171b2342fa100f430481afd8",
+      "commit": "637d2a6547242ca3bf4ee221eb03cfdb2325c6ad",
       "evidence": {
         "module_exists": true,
         "profile_file_exists": true,
