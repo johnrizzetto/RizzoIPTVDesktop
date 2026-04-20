@@ -60,6 +60,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import coil.size.Size
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.rizzoplayer.iptv.RizzoApp
@@ -1221,6 +1222,7 @@ private fun QuickSwitchCard(
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(channel.icon)
+                    .size(Size(56, 56))
                     .crossfade(false)
                     .build(),
                 contentDescription = null,

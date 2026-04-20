@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.size.Size
 import com.rizzoplayer.iptv.AppConfig
 import com.rizzoplayer.iptv.RizzoApp
 import com.rizzoplayer.iptv.data.local.PlaybackPositionStore
@@ -113,6 +114,7 @@ fun ChannelLogo(url: String?, name: String, size: Int) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(fullUrl)
+                .size(Size(size * 2, size * 2))
                 .memoryCachePolicy(CachePolicy.ENABLED)
                 .diskCachePolicy(CachePolicy.ENABLED)
                 .crossfade(true)

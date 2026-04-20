@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.size.Size
 import com.rizzoplayer.iptv.AppConfig
 import com.rizzoplayer.iptv.data.model.Favorite
 import com.rizzoplayer.iptv.ui.theme.*
@@ -139,6 +140,7 @@ private fun FavoriteRow(
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(iconUrl)
+                    .size(Size(96, 144))
                     .memoryCachePolicy(CachePolicy.ENABLED)
                     .diskCachePolicy(CachePolicy.ENABLED)
                     .crossfade(true)

@@ -27,7 +27,7 @@ class RizzoApp : Application() {
             ImageLoader.Builder(this)
                 .memoryCache {
                     MemoryCache.Builder(this)
-                        .maxSizePercent(0.30)
+                        .maxSizePercent(0.15)
                         .build()
                 }
                 .diskCache {
