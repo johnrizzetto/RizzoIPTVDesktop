@@ -48,9 +48,9 @@ class TmdbRepository(
         crossinline fetch: suspend () -> List<T>
     ): List<T> {
         diskCache.get(key, ttlMs)?.let { text ->
-            return withContext(Dispatchers.Default) {
-                try { json.decodeFromString<List<T>>(text) } catch (e: Exception) { emptyList() }
-            }
+            withContext(Dispatchers.Default) {
+                try { json.decodeFromString<List<T>>(text) } catch (e: Exception) { null }
+            }?.let { return it }
         }
         return try {
             val result = if (coalesceKey != null) coalesced(coalesceKey) { fetch() } else fetch()
