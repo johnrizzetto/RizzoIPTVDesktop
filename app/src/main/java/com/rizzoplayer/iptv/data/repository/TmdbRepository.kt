@@ -11,14 +11,21 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNamingStrategy
 
 class TmdbRepository(
     private val tmdb: TmdbApiService,
     private val torrentio: TorrentioService,
     private val diskCache: DiskCache,
-    private val json: Json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true }
+    private val json: Json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+        isLenient = true
+        namingStrategy = JsonNamingStrategy.SnakeCase
+    }
 ) {
     companion object {
         const val TTL_CATALOGS = 6 * 60 * 60 * 1000L
