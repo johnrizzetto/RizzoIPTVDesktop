@@ -2,19 +2,14 @@ package com.rizzoplayer.iptv.data.api
 
 import android.content.Context
 import com.google.gson.annotations.SerializedName
-import okhttp3.Cache
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import com.rizzoplayer.iptv.BuildConfig
-import java.io.File
 
 class TraktService(
     context: Context,
     baseUrl: String = "https://api.trakt.tv"
 ) {
-    private val client = OkHttpClient.Builder()
-        .cache(Cache(File(context.cacheDir, "okhttp_trakt_cache"), 10L * 1024 * 1024))
-        .build()
+    private val client = NetworkClient.base(context)
 
     private val baseUrl = baseUrl.trimEnd('/')
 

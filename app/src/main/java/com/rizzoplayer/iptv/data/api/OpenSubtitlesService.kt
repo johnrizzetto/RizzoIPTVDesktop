@@ -1,31 +1,14 @@
 package com.rizzoplayer.iptv.data.api
 
-import android.content.Context
 import com.google.gson.annotations.SerializedName
-import okhttp3.Cache
-import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.File
 
 class OpenSubtitlesService(
-    private val cacheDir: File,
+    context: android.content.Context,
     private val apiKey: String,
     baseUrl: String = "https://api.opensubtitles.com/api/v1"
 ) {
-    constructor(context: android.content.Context, apiKey: String, baseUrl: String = "https://api.opensubtitles.com/api/v1")
-            : this(context.cacheDir, apiKey, baseUrl)
-
-    private val client = OkHttpClient.Builder()
-        .cache(Cache(File(cacheDir, "okhttp_opensubtitles_cache"), 10L * 1024 * 1024))
-        .addInterceptor { chain ->
-            val req = chain.request().newBuilder()
-                .header("Api-Key", apiKey)
-                .header("Content-Type", "application/json")
-                .build()
-            chain.proceed(req)
-        }
-        .build()
-
+    private val client = NetworkClient.opensubtitles(context, apiKey)
     private val baseUrl = baseUrl.trimEnd('/')
 
     data class SubtitleSearchResult(

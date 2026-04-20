@@ -7,32 +7,30 @@ import com.rizzoplayer.iptv.BuildConfig
 import com.rizzoplayer.iptv.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.Cache
-import okhttp3.ConnectionPool
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
+import okhttp3.Interceptor
 import okhttp3.Request
-import java.io.File
-import java.util.concurrent.TimeUnit
+import okhttp3.Response
 
-class TmdbApiService(context: Context? = null) {
+class TmdbApiService(context: Context) {
 
-    private val client = OkHttpClient.Builder().apply {
-        if (context != null) {
-            cache(Cache(File(context.cacheDir, "okhttp_tmdb_cache"), 50L * 1024 * 1024))
-        }
-        connectTimeout(10, TimeUnit.SECONDS)
-        readTimeout(15, TimeUnit.SECONDS)
-        protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
-        connectionPool(ConnectionPool(10, 2, TimeUnit.MINUTES))
-        addInterceptor { chain ->
-            val req = chain.request().newBuilder()
-                .header("Authorization", "Bearer ${BuildConfig.TMDB_BEARER}")
-                .header("accept", "application/json")
+    private val client = NetworkClient.base(context).newBuilder()
+        .addNetworkInterceptor { chain: Interceptor.Chain ->
+            val response = chain.proceed(chain.request())
+            val path = chain.request().url.encodedPath
+            val (maxAge, swr) = when {
+                path.startsWith("/3/genre") -> 604800 to 604800
+                path.startsWith("/3/discover") -> 3600 to 86400
+                path.startsWith("/3/movie/") && path.endsWith("/recommendations") -> 86400 to 604800
+                path.contains("/movie/") || path.contains("/tv/") -> 86400 to 604800
+                path.startsWith("/3/search/") -> 600 to 3600
+                else -> 300 to 3600
+            }
+            response.newBuilder()
+                .removeHeader("Cache-Control")
+                .header("Cache-Control", "public, max-age=$maxAge, stale-while-revalidate=$swr")
                 .build()
-            chain.proceed(req)
         }
-    }.build()
+        .build()
 
     private val gson = Gson()
     private val baseUrl = "https://api.themoviedb.org/3"

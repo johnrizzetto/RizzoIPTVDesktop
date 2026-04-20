@@ -8,28 +8,14 @@ import com.rizzoplayer.iptv.data.model.TorBoxAddResult
 import com.rizzoplayer.iptv.data.model.TorBoxTorrent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.Cache
-import okhttp3.ConnectionPool
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
-import java.io.File
-import java.util.concurrent.TimeUnit
 
-class TorBoxApiService(context: Context? = null) {
+class TorBoxApiService(context: Context) {
 
-    private val client = OkHttpClient.Builder().apply {
-        if (context != null) {
-            cache(Cache(File(context.cacheDir, "okhttp_torbox_cache"), 50L * 1024 * 1024))
-        }
-        connectTimeout(15, TimeUnit.SECONDS)
-        readTimeout(20, TimeUnit.SECONDS)
-        protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
-        connectionPool(ConnectionPool(10, 2, TimeUnit.MINUTES))
-    }.build()
+    private val client = NetworkClient.base(context)
 
     private val gson = Gson()
     private val baseUrl = "https://api.torbox.app/v1"

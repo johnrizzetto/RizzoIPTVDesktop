@@ -5,25 +5,11 @@ import com.google.gson.Gson
 import com.rizzoplayer.iptv.data.model.TorrentioResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.Cache
-import okhttp3.ConnectionPool
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
 import okhttp3.Request
-import java.io.File
-import java.util.concurrent.TimeUnit
 
-class TorrentioService(context: Context? = null) {
+class TorrentioService(context: Context) {
 
-    private val client = OkHttpClient.Builder().apply {
-        if (context != null) {
-            cache(Cache(File(context.cacheDir, "okhttp_torrentio_cache"), 50L * 1024 * 1024))
-        }
-        connectTimeout(10, TimeUnit.SECONDS)
-        readTimeout(15, TimeUnit.SECONDS)
-        protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
-        connectionPool(ConnectionPool(10, 2, TimeUnit.MINUTES))
-    }.build()
+    private val client = NetworkClient.base(context)
 
     private val gson = Gson()
     private val baseUrl = "https://torrentio.strem.fun"

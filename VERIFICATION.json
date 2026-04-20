@@ -9,29 +9,55 @@
   "tasks": {
     "T1_shared_okhttp": {
       "status": "DONE",
-      "commit": "e1cff9a",
+      "commit": "ca0b32d",
       "improvement": "Shared OkHttpClient across IPTV/TMDB/TorBox/Trakt services; connection prewarm on initialization; cache directory deduplication",
       "evidence": [
         "compileV2DebugUnitTestKotlin: PASS",
-        "testV2DebugUnitTest (OpenSubtitlesServiceTest, SharedHttpClientTest): 9 tests PASS",
+        "testV2DebugUnitTest: PASS",
         "NetworkClient.kt: baseClient(), iptx(), opensubtitles() all delegate to shared cache + pool"
       ]
     },
     "T2_log_strip": {
-      "status": "pending",
-      "improvement": null
+      "status": "DONE",
+      "commit": "9833da3",
+      "improvement": "Batch position writes at 5s wall-clock intervals; ProGuard assumenosideeffects strips Log.v/d/i from release builds",
+      "evidence": [
+        "compileV2DebugUnitTestKotlin: PASS",
+        "testV2DebugUnitTest (PositionSaveBatchTest): PASS",
+        "PlayerActivity.kt: positionSaveJob + MutableStateFlow batching",
+        "app/proguard-rules.pro: -assumenosideeffects Log v/d/i"
+      ]
     },
     "T3_coil_memory": {
-      "status": "pending",
-      "improvement": null
+      "status": "DONE",
+      "commit": "4133efe",
+      "improvement": "Explicit pixel sizes (2× dp slot) on all AsyncImage calls; memory cache cap 15%; disk cache 100MB",
+      "evidence": [
+        "compileV2DebugUnitTestKotlin: PASS",
+        "testV2DebugUnitTest (ImageRequestSizeTest): PASS",
+        "All AsyncImage calls now use coil.size.Size(w, h)"
+      ]
     },
     "T4_exoplayer_pool": {
-      "status": "pending",
-      "improvement": null
+      "status": "DONE",
+      "commit": "b55cc89",
+      "improvement": "Warm pool of 2 pre-built Live ExoPlayer instances; VOD always fresh; 5-min idle eviction",
+      "evidence": [
+        "compileV2DebugUnitTestKotlin: PASS",
+        "PlayerPool.kt: ConcurrentLinkedQueue<PooledPlayer>, acquireLive, release, warmUp",
+        "RizzoApp.kt: PlayerPool.warmUp on Dispatchers.IO"
+      ]
     },
     "T5_speculative_resolution": {
-      "status": "pending",
-      "improvement": null
+      "status": "DONE",
+      "commit": "eb49d0f",
+      "improvement": "ConcurrentHashMap deduplicates in-flight stream resolutions with 60s TTL; prefetch on movie/show detail composition",
+      "evidence": [
+        "compileV2DebugUnitTestKotlin: PASS",
+        "testV2DebugUnitTest (SpeculativeStreamTest): PASS",
+        "MainViewModel.kt: speculativeStreams map, prefetchStream, awaitStream",
+        "TorBoxRepository.kt: resolveFirstMovie, resolveFirst"
+      ]
     },
     "T6_cache_policy": {
       "status": "pending",

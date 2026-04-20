@@ -43,3 +43,10 @@
 -keepclassmembers class * {
     <init>(...);
 }
+
+# Strip Log.d/v/i from release builds — they are too expensive for hot paths
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}

@@ -19,7 +19,7 @@ class IPTVRepository(
     val favoritesStore: FavoritesStore,
     val recentlyWatchedStore: RecentlyWatchedStore,
     private val diskCache: DiskCache,
-    private val api: IPTVApiService = IPTVApiService(),
+    private val api: IPTVApiService,
     private val gson: Gson = Gson()
 ) {
     // ── Two-level cache helpers ───────────────────────────────────────────
