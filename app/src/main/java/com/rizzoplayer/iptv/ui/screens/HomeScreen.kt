@@ -373,7 +373,8 @@ private fun MoviesContent(
                             type = "tmdb_movie",
                             icon = content.movie.posterPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
                         )
-                    }
+                    },
+                    viewModel = viewModel
                 )
             }
             else -> EmptyHint("Select a category")
@@ -442,7 +443,8 @@ private fun ShowsContent(
                             type = "tmdb_episode",
                             icon = episode.stillPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
                         )
-                    }
+                    },
+                    viewModel = viewModel
                 )
             }
             else -> EmptyHint("Select a category")

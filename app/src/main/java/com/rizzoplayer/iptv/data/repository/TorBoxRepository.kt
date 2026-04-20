@@ -225,4 +225,38 @@ class TorBoxRepository(
         }
         emit(StreamResolution.Failed("Timed out preparing fallback stream"))
     }
+
+    /**
+     * Lightweight one-shot: fetch and rank streams, return the best magnet URL.
+     * Used for speculative prefetch — does NOT wait for TorBox caching/download.
+     */
+    suspend fun resolveFirstMovie(imdbId: String): String? {
+        val streams = try {
+            torrentio.getMovieStream(TORBOX_CONFIG, imdbId).streams
+        } catch (_: Exception) { return null }
+        val ranked = rankStreams(streams)
+        val hashes = ranked.mapNotNull { parseInfoHash(it) }.distinct()
+        val cachedMap = try { torBox.checkCached(hashes) } catch (_: Exception) { emptyMap() }
+        val best = ranked.firstOrNull { s ->
+            parseInfoHash(s)?.let { cachedMap[it] == true } == true
+        } ?: ranked.firstOrNull() ?: return null
+        return best.url
+    }
+
+    /**
+     * Lightweight one-shot: fetch and rank episode streams, return the best magnet URL.
+     * Used for speculative prefetch — does NOT wait for TorBox caching/download.
+     */
+    suspend fun resolveFirst(imdbId: String, season: Int, episode: Int): String? {
+        val streams = try {
+            torrentio.getEpisodeStream(TORBOX_CONFIG, imdbId, season, episode).streams
+        } catch (_: Exception) { return null }
+        val ranked = rankStreams(streams)
+        val hashes = ranked.mapNotNull { parseInfoHash(it) }.distinct()
+        val cachedMap = try { torBox.checkCached(hashes) } catch (_: Exception) { emptyMap() }
+        val best = ranked.firstOrNull { s ->
+            parseInfoHash(s)?.let { cachedMap[it] == true } == true
+        } ?: ranked.firstOrNull() ?: return null
+        return best.url
+    }
 }

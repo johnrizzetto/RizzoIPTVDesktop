@@ -38,6 +38,7 @@ import coil.request.ImageRequest
 import coil.size.Size
 import com.rizzoplayer.iptv.AppConfig
 import com.rizzoplayer.iptv.data.model.Favorite
+import com.rizzoplayer.iptv.ui.viewmodel.MainViewModel
 import com.rizzoplayer.iptv.data.model.RecentItem
 import com.rizzoplayer.iptv.data.model.TmdbEpisode
 import com.rizzoplayer.iptv.data.model.TmdbSeason
@@ -251,7 +252,8 @@ fun TmdbShowDetailView(
     seasons: List<TmdbSeason>,
     favorites: Map<String, Favorite>,
     onPlay: (TmdbEpisode) -> Unit,
-    onFavToggle: (TmdbEpisode) -> Unit
+    onFavToggle: (TmdbEpisode) -> Unit,
+    viewModel: MainViewModel,
 ) {
     val backdrop = show.backdropPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_BACKDROP_SIZE}$it" }
     val poster = show.posterPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}$it" }
@@ -270,6 +272,16 @@ fun TmdbShowDetailView(
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(120)
         try { episodeFocus.requestFocus() } catch (_: Exception) {}
+    }
+
+    // Speculatively prefetch stream for the first episode of the selected season
+    LaunchedEffect(selectedSeasonIdx, seasons) {
+        val firstEp = seasons.getOrNull(selectedSeasonIdx)?.episodes?.firstOrNull()
+        firstEp?.let { ep ->
+            show.imdbId?.let { imdbId ->
+                viewModel.prefetchStream(imdbId, ep.seasonNumber, ep.episodeNumber)
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {

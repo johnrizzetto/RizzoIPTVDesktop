@@ -16,6 +16,8 @@ import com.rizzoplayer.iptv.data.repository.IPTVRepository
 import com.rizzoplayer.iptv.data.repository.TmdbRepository
 import com.rizzoplayer.iptv.data.repository.TorBoxRepository
 import com.rizzoplayer.iptv.data.repository.StreamResolution
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -23,6 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import androidx.compose.runtime.snapshotFlow
 
 @Stable
@@ -173,6 +176,50 @@ class MainViewModel(
         viewModelScope.launch {
             try { tmdbRepository.getShowDetail(id) } catch (_: Exception) {}
         }
+    }
+
+    // ── Speculative stream resolution ──────────────────────────────────
+    // Deduplicates in-flight resolutions; entries expire after 60s
+    private val speculativeStreams = ConcurrentHashMap<String, Deferred<Result<String>>>()
+    private val SPECULATIVE_TTL_MS = 60_000L
+
+    private fun streamKey(imdbId: String, season: Int?, episode: Int?) =
+        if (season != null && episode != null) "$imdbId:S${season}E${episode}" else imdbId
+
+    /**
+     * Start resolving a stream URL speculatively. Idempotent — concurrent calls
+     * for the same key share the same Deferred. Entries expire after 60s so
+     * stale resolutions are not reused.
+     */
+    fun prefetchStream(imdbId: String, season: Int? = null, episode: Int? = null) {
+        val key = streamKey(imdbId, season, episode)
+        speculativeStreams[key]?.let { return } // already in-flight or cached
+        speculativeStreams[key] = viewModelScope.async(start = CoroutineStart.LAZY) {
+            val url = if (season != null && episode != null) {
+                torBoxRepository.resolveFirst(imdbId, season, episode)
+            } else {
+                torBoxRepository.resolveFirstMovie(imdbId)
+            }
+            if (url != null) {
+                Result.success(url)
+            } else {
+                Result.failure(Exception("No stream available"))
+            }
+        }.also { _ ->
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(SPECULATIVE_TTL_MS)
+                speculativeStreams.remove(key)
+            }
+        }
+    }
+
+    /**
+     * Await a previously prefetched stream URL. Returns null if nothing is
+     * in-flight or cached for this key.
+     */
+    suspend fun awaitStream(imdbId: String, season: Int? = null, episode: Int? = null): String? {
+        val key = streamKey(imdbId, season, episode)
+        return speculativeStreams[key]?.await()?.getOrNull()
     }
 
     // ── Playback fallback ────────────────────────────────────────────────

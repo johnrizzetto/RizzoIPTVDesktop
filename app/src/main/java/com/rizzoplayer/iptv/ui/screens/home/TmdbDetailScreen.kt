@@ -45,8 +45,14 @@ fun TmdbMovieDetailView(
     movie: TmdbMovie,
     isFavorite: Boolean,
     onPlay: () -> Unit,
-    onToggleFavorite: () -> Unit
+    onToggleFavorite: () -> Unit,
+    viewModel: com.rizzoplayer.iptv.ui.viewmodel.MainViewModel,
 ) {
+    // Speculatively prefetch stream so playback starts faster
+    LaunchedEffect(movie.imdbId) {
+        movie.imdbId?.let { viewModel.prefetchStream(it) }
+    }
+
     val backdropUrl = movie.backdropPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_BACKDROP_SIZE}$it" }
     val posterUrl = movie.posterPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}$it" }
     val playFocus = remember { FocusRequester() }
