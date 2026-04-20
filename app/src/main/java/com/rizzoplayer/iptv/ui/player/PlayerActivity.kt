@@ -7,6 +7,7 @@ import android.util.Rational
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.viewModels
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,6 +66,9 @@ import kotlinx.serialization.json.Json
 import com.rizzoplayer.iptv.RizzoApp
 import com.rizzoplayer.iptv.data.local.PlaybackPositionStore
 import com.rizzoplayer.iptv.data.model.ChannelRef
+import com.rizzoplayer.iptv.data.model.Favorite
+import com.rizzoplayer.iptv.data.local.FavoritesStore
+import com.rizzoplayer.iptv.ui.viewmodel.MainViewModel
 import com.rizzoplayer.iptv.ui.theme.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -88,6 +92,8 @@ class PlayerActivity : ComponentActivity() {
     // Content identification for persistent positions
     private var contentId: String = ""
     private var contentType: String = "live"
+    private val viewModel: MainViewModel by viewModels()
+    private val liveFavoriteIds = mutableStateOf<Set<String>>(emptySet())
 
     // Episode auto-advance
     private var nextUrl: String = ""
@@ -185,6 +191,12 @@ class PlayerActivity : ComponentActivity() {
         // Start periodic position tracking + batch save (every 5s)
         startPositionTracking()
 
+        // Subscribe to live favorites from DataStore
+        lifecycleScope.launch {
+            FavoritesStore(this@PlayerActivity).favorites
+                .collect { map -> liveFavoriteIds.value = map.keys }
+        }
+
         setContent {
             PlayerScreen(
                 player           = player!!,
@@ -193,6 +205,8 @@ class PlayerActivity : ComponentActivity() {
                 resumeMs         = resumeMs,
                 recentChannels   = recentChannels,
                 favoriteChannels = favoriteChannels,
+                contentId        = contentId,
+                liveFavoriteIds  = liveFavoriteIds,
                 showResolution   = showResolution,
                 showRecentBar    = showRecentBar,
                 showTrackPicker  = showTrackPicker,
@@ -208,7 +222,8 @@ class PlayerActivity : ComponentActivity() {
                 onRetrySetup     = { retryJob = it },
                 onBack           = ::finish,
                 onVodPlaybackError = ::onVodPlaybackError,
-                onSwitchChannel  = { newUrl, _ -> currentUrl = newUrl }
+                onSwitchChannel  = { newUrl, _ -> currentUrl = newUrl },
+                viewModel        = viewModel
             )
         }
     }
@@ -525,6 +540,8 @@ private fun PlayerScreen(
     resumeMs: Long,
     recentChannels: List<ChannelRef>,
     favoriteChannels: List<ChannelRef>,
+    contentId: String,
+    liveFavoriteIds: State<Set<String>>,
     showResolution: State<Boolean>,
     showRecentBar: State<Boolean>,
     showTrackPicker: State<Boolean>,
@@ -540,7 +557,8 @@ private fun PlayerScreen(
     playerError: State<String?>,
     onDismissError: () -> Unit,
     onPlayerError: (String) -> Unit,
-    onVodPlaybackError: () -> Unit
+    onVodPlaybackError: () -> Unit,
+    viewModel: MainViewModel
 ) {
     val scope = rememberCoroutineScope()
     val appContext = LocalContext.current.applicationContext
@@ -771,16 +789,12 @@ private fun PlayerScreen(
                     recentChannels   = liveRecentChannels,
                     favoriteChannels = favoriteChannels,
                     currentTitle     = currentTitle.ifEmpty { title },
+                    currentStreamId  = contentId,
+                    isCurrentlyFavorited = liveFavoriteIds.value.contains(contentId),
                     requestFocus     = requestOverlayFocus,
                     onSwitchChannel  = switchChannel,
-                    onAddFavorite    = { channelTitle ->
-                        val streamId = currentUrl.substringAfterLast("/").substringBefore(".").trim()
-                        if (streamId.isNotEmpty()) {
-                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                val store = com.rizzoplayer.iptv.data.local.FavoritesStore(appContext)
-                                store.add(com.rizzoplayer.iptv.data.model.Favorite(streamId, channelTitle, "live"))
-                            }
-                        }
+                    onToggleFavorite = { id, title, _ ->
+                        viewModel.toggleFavorite(id, title, "live")
                     }
                 )
             }
@@ -1053,9 +1067,11 @@ private fun QuickSwitchOverlay(
     recentChannels: List<ChannelRef>,
     favoriteChannels: List<ChannelRef>,
     currentTitle: String,
+    currentStreamId: String,
+    isCurrentlyFavorited: Boolean,
     requestFocus: MutableState<Boolean>,
     onSwitchChannel: (url: String, title: String) -> Unit,
-    onAddFavorite: (String) -> Unit
+    onToggleFavorite: (id: String, title: String, isFav: Boolean) -> Unit
 ) {
     val firstCardFocus = remember { FocusRequester() }
 
@@ -1077,7 +1093,6 @@ private fun QuickSwitchOverlay(
         val hasFavs = favoriteChannels.isNotEmpty()
 
         // ── "♥ Add to Favorites" button for current channel ──────────────
-        var addedFav by remember { mutableStateOf(false) }
         Row(
             modifier = Modifier.padding(start = 24.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1090,16 +1105,14 @@ private fun QuickSwitchOverlay(
                     .then(if (favBtnFocused) Modifier.border(1.dp, Color(0xFFFFB800), RoundedCornerShape(6.dp)) else Modifier)
                     .onFocusChanged { favBtnFocused = it.isFocused }
                     .focusable()
-                    .clickable {
-                        if (!addedFav) { onAddFavorite(currentTitle); addedFav = true }
-                    }
+                    .clickable { onToggleFavorite(currentStreamId, currentTitle, isCurrentlyFavorited) }
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(if (addedFav) "♥" else "♡", color = Color(0xFFFFB800), fontSize = 13.sp)
+                Text(if (isCurrentlyFavorited) "♥" else "♡", color = Color(0xFFFFB800), fontSize = 13.sp)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    if (addedFav) "Added!" else "Favorite: $currentTitle",
+                    if (isCurrentlyFavorited) "Remove from Favorites" else "Add to Favorites",
                     color = if (favBtnFocused) Color.White else Color.White.copy(alpha = 0.6f),
                     fontSize = 11.sp,
                     maxLines = 1,
