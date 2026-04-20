@@ -83,92 +83,92 @@ class TmdbRepository(
         }
     }
 
-    suspend fun getMovieGenres(): List<TmdbGenre> = cachedList("tmdb_movie_genres", TTL_GENRES) {
+    suspend fun getMovieGenres(): List<TmdbGenre> = cachedList("tmdb_v2_movie_genres", TTL_GENRES) {
         tmdb.getMovieGenres().genres
     }
 
-    suspend fun getTvGenres(): List<TmdbGenre> = cachedList("tmdb_tv_genres", TTL_GENRES) {
+    suspend fun getTvGenres(): List<TmdbGenre> = cachedList("tmdb_v2_tv_genres", TTL_GENRES) {
         tmdb.getTvGenres().genres
     }
 
-    suspend fun getPopularMovies(): List<TmdbMovie> = cachedList("tmdb_popular_movies", TTL_CATALOGS) {
+    suspend fun getPopularMovies(): List<TmdbMovie> = cachedList("tmdb_v2_popular_movies", TTL_CATALOGS) {
         tmdb.getPopularMovies().results
     }
 
-    suspend fun getTrendingMovies(): List<TmdbMovie> = cachedList("tmdb_trending_movies", TTL_CATALOGS) {
+    suspend fun getTrendingMovies(): List<TmdbMovie> = cachedList("tmdb_v2_trending_movies", TTL_CATALOGS) {
         tmdb.getTrendingMovies().results
     }
 
-    suspend fun getTopRatedMovies(): List<TmdbMovie> = cachedList("tmdb_toprated_movies", TTL_CATALOGS) {
+    suspend fun getTopRatedMovies(): List<TmdbMovie> = cachedList("tmdb_v2_toprated_movies", TTL_CATALOGS) {
         tmdb.getTopRatedMovies().results
     }
 
-    suspend fun getNowPlayingMovies(): List<TmdbMovie> = cachedList("tmdb_nowplaying_movies", TTL_CATALOGS) {
+    suspend fun getNowPlayingMovies(): List<TmdbMovie> = cachedList("tmdb_v2_nowplaying_movies", TTL_CATALOGS) {
         tmdb.getNowPlayingMovies().results
     }
 
-    suspend fun getPopularShows(): List<TmdbShow> = cachedList("tmdb_popular_shows", TTL_CATALOGS) {
+    suspend fun getPopularShows(): List<TmdbShow> = cachedList("tmdb_v2_popular_shows", TTL_CATALOGS) {
         tmdb.getPopularShows().results
     }
 
-    suspend fun getTrendingShows(): List<TmdbShow> = cachedList("tmdb_trending_shows", TTL_CATALOGS) {
+    suspend fun getTrendingShows(): List<TmdbShow> = cachedList("tmdb_v2_trending_shows", TTL_CATALOGS) {
         tmdb.getTrendingShows().results
     }
 
-    suspend fun getTopRatedShows(): List<TmdbShow> = cachedList("tmdb_toprated_shows", TTL_CATALOGS) {
+    suspend fun getTopRatedShows(): List<TmdbShow> = cachedList("tmdb_v2_toprated_shows", TTL_CATALOGS) {
         tmdb.getTopRatedShows().results
     }
 
-    suspend fun getOnTheAirShows(): List<TmdbShow> = cachedList("tmdb_ontheair_shows", TTL_CATALOGS) {
+    suspend fun getOnTheAirShows(): List<TmdbShow> = cachedList("tmdb_v2_ontheair_shows", TTL_CATALOGS) {
         tmdb.getOnTheAirShows().results
     }
 
-    suspend fun getNetflixMovies(): List<TmdbMovie> = cachedList("tmdb_netflix_movies", TTL_CATALOGS) {
+    suspend fun getNetflixMovies(): List<TmdbMovie> = cachedList("tmdb_v2_netflix_movies", TTL_CATALOGS) {
         tmdb.discoverMovies("with_watch_providers=8&watch_region=US&sort_by=popularity.desc").results
     }
 
-    suspend fun getNetflixShows(): List<TmdbShow> = cachedList("tmdb_netflix_shows", TTL_CATALOGS) {
+    suspend fun getNetflixShows(): List<TmdbShow> = cachedList("tmdb_v2_netflix_shows", TTL_CATALOGS) {
         tmdb.discoverShows("with_networks=213&sort_by=popularity.desc").results
     }
 
-    suspend fun getAppleMovies(): List<TmdbMovie> = cachedList("tmdb_apple_movies", TTL_CATALOGS) {
+    suspend fun getAppleMovies(): List<TmdbMovie> = cachedList("tmdb_v2_apple_movies", TTL_CATALOGS) {
         tmdb.discoverMovies("with_watch_providers=350&watch_region=US&sort_by=popularity.desc").results
     }
 
-    suspend fun getAppleShows(): List<TmdbShow> = cachedList("tmdb_apple_shows", TTL_CATALOGS) {
+    suspend fun getAppleShows(): List<TmdbShow> = cachedList("tmdb_v2_apple_shows", TTL_CATALOGS) {
         tmdb.discoverShows("with_networks=2552&sort_by=popularity.desc").results
     }
 
-    suspend fun getHboMovies(): List<TmdbMovie> = cachedList("tmdb_hbo_movies", TTL_CATALOGS) {
+    suspend fun getHboMovies(): List<TmdbMovie> = cachedList("tmdb_v2_hbo_movies", TTL_CATALOGS) {
         tmdb.discoverMovies("with_watch_providers=34&watch_region=US&sort_by=popularity.desc").results
     }
 
-    suspend fun getHboShows(): List<TmdbShow> = cachedList("tmdb_hbo_shows", TTL_CATALOGS) {
+    suspend fun getHboShows(): List<TmdbShow> = cachedList("tmdb_v2_hbo_shows", TTL_CATALOGS) {
         tmdb.discoverShows("with_networks=49&sort_by=popularity.desc").results
     }
 
     suspend fun getMoviesByGenre(tmdbGenreId: Int): List<TmdbMovie> = cachedList(
-        "tmdb_movies_g_$tmdbGenreId", TTL_CATALOGS
+        "tmdb_v2_movies_g_$tmdbGenreId", TTL_CATALOGS
     ) { tmdb.discoverMovies("with_genres=$tmdbGenreId&sort_by=popularity.desc").results }
 
     suspend fun getShowsByGenre(tmdbGenreId: Int): List<TmdbShow> = cachedList(
-        "tmdb_shows_g_$tmdbGenreId", TTL_CATALOGS
+        "tmdb_v2_shows_g_$tmdbGenreId", TTL_CATALOGS
     ) { tmdb.discoverShows("with_genres=$tmdbGenreId&sort_by=popularity.desc").results }
 
     suspend fun getMovieDetail(id: Int): TmdbMovie? = cachedObject(
-        key = "tmdb_movie_$id",
+        key = "tmdb_v2_movie_$id",
         ttlMs = TTL_DETAIL,
         coalesceKey = "fetch_movie_$id"
     ) { tmdb.getMovieDetail(id) }
 
     suspend fun getShowDetail(id: Int): TmdbShow? = cachedObject(
-        key = "tmdb_show_$id",
+        key = "tmdb_v2_show_$id",
         ttlMs = TTL_DETAIL,
         coalesceKey = "fetch_show_$id"
     ) { tmdb.getShowDetail(id) }
 
     suspend fun getSeasons(showId: Int, count: Int): List<TmdbSeason> = cachedList(
-        key = "tmdb_seasons_$showId",
+        key = "tmdb_v2_seasons_$showId",
         ttlMs = TTL_DETAIL,
         coalesceKey = "fetch_seasons_$showId"
     ) {
@@ -182,15 +182,15 @@ class TmdbRepository(
     }
 
     suspend fun searchMovies(query: String): List<TmdbMovie> = cachedList(
-        key = "tmdb_search_movie_${query.trim().lowercase()}",
+        key = "tmdb_v2_search_movie_${query.trim().lowercase()}",
         ttlMs = TTL_SEARCH,
-        coalesceKey = "tmdb_search_movie_${query.trim().lowercase()}"
+        coalesceKey = "tmdb_v2_search_movie_${query.trim().lowercase()}"
     ) { tmdb.searchMovies(query).results }
 
     suspend fun searchShows(query: String): List<TmdbShow> = cachedList(
-        key = "tmdb_search_show_${query.trim().lowercase()}",
+        key = "tmdb_v2_search_show_${query.trim().lowercase()}",
         ttlMs = TTL_SEARCH,
-        coalesceKey = "tmdb_search_show_${query.trim().lowercase()}"
+        coalesceKey = "tmdb_v2_search_show_${query.trim().lowercase()}"
     ) { tmdb.searchShows(query).results }
 
     suspend fun searchAll(query: String): Pair<List<TmdbMovie>, List<TmdbShow>> = coroutineScope {
