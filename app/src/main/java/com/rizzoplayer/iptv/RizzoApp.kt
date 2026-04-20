@@ -6,6 +6,7 @@ import coil.ImageLoader
 import coil.disk.DiskCache
 import coil.request.CachePolicy
 import coil.memory.MemoryCache
+import com.rizzoplayer.iptv.data.api.NetworkClient
 import com.rizzoplayer.iptv.data.local.PlaybackPositionStore
 import com.rizzoplayer.iptv.data.local.PreferencesStore
 
@@ -41,6 +42,16 @@ class RizzoApp : Application() {
                 .crossfade(200)
                 .respectCacheHeaders(false)
                 .build()
+        )
+
+        NetworkClient.prewarm(
+            this,
+            listOf(
+                "api.themoviedb.org",
+                "api.torbox.app",
+                "torrentio.strem.fun",
+                "image.tmdb.org"
+            )
         )
     }
 }

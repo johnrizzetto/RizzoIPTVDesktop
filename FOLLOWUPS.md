@@ -16,3 +16,6 @@ The gradle install step cannot complete without a physical or emulator device co
 
 ### OpenSubtitlesService device code polling blocks test thread
 `TraktService.pollForToken()` uses `Thread.sleep()` in a suspend context (blocks the thread). Consider replacing with a non-blocking delay loop using `kotlinx.coroutines.delay` in a follow-up refactor.
+
+### DataStore preferences proto corruption crashes app on first launch
+The DataStore files (`credentials.preferences_pb`, etc.) can become corrupted if the device loses power or is force-killed during a write. The app crashes immediately at startup with `CorruptionException: Unable to parse preferences proto`. Workaround: `run-as <package> rm -f files/datastore/*.preferences_pb` to clear corrupted files. Long-term fix: add corruption handling with delete-and-retry in each store class.

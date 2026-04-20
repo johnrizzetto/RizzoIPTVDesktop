@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.gson.Gson
+import com.rizzoplayer.iptv.data.api.IPTVApiService
 import com.rizzoplayer.iptv.data.local.CredentialsStore
 import com.rizzoplayer.iptv.data.local.DiskCache
 import com.rizzoplayer.iptv.data.model.Favorite
@@ -52,16 +53,17 @@ class MainActivity : ComponentActivity() {
             credentialsStore      = CredentialsStore(applicationContext),
             favoritesStore        = FavoritesStore(applicationContext),
             recentlyWatchedStore  = RecentlyWatchedStore(applicationContext),
-            diskCache             = DiskCache(applicationContext)
+            diskCache             = DiskCache(applicationContext),
+            api                  = IPTVApiService(applicationContext)
         )
         val tmdbRepository = com.rizzoplayer.iptv.data.repository.TmdbRepository(
-            tmdb = com.rizzoplayer.iptv.data.api.TmdbApiService(),
-            torrentio = com.rizzoplayer.iptv.data.api.TorrentioService(),
+            tmdb = com.rizzoplayer.iptv.data.api.TmdbApiService(applicationContext),
+            torrentio = com.rizzoplayer.iptv.data.api.TorrentioService(applicationContext),
             diskCache = DiskCache(applicationContext, "tmdb_api")
         )
         val torBoxRepository = com.rizzoplayer.iptv.data.repository.TorBoxRepository(
-            torBox = com.rizzoplayer.iptv.data.api.TorBoxApiService(),
-            torrentio = com.rizzoplayer.iptv.data.api.TorrentioService()
+            torBox = com.rizzoplayer.iptv.data.api.TorBoxApiService(applicationContext),
+            torrentio = com.rizzoplayer.iptv.data.api.TorrentioService(applicationContext)
         )
         val serversStore = ServersStore(applicationContext)
         val factory = ViewModelFactory(repository, tmdbRepository, torBoxRepository, serversStore, app.preferencesStore, app)

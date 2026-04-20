@@ -1,12 +1,16 @@
 package com.rizzoplayer.iptv.data.api
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.Cache
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
+import okhttp3.Request
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -100,6 +104,28 @@ object NetworkClient {
             prewarmMethod.invoke(connectionPool)
         } catch (_: Exception) {
             // prewarm not available — silently skip
+        }
+    }
+
+    fun prewarm(context: Context, hosts: List<String>) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                init(context)
+                val client = baseClient()
+                hosts.forEach { host ->
+                    try {
+                        val request = Request.Builder()
+                            .url("https://$host/")
+                            .head()
+                            .build()
+                        client.newCall(request).execute().use { /* prewarm */ }
+                    } catch (_: Exception) {
+                        // silently skip failed hosts
+                    }
+                }
+            } catch (_: Exception) {
+                // silently skip if client init fails
+            }
         }
     }
 }
