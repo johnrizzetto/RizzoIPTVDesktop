@@ -154,6 +154,80 @@ class TmdbRepository(
         tmdb.discoverShows("with_networks=49&sort_by=popularity.desc").results
     }
 
+    // ── Streaming Platforms (Movies) ──────────────────────────
+    suspend fun getPrimeMovies() = cachedList("tmdb_v2_prime_movies", TTL_CATALOGS) {
+        tmdb.getPrimeMovies().results
+    }
+    suspend fun getDisneyMovies() = cachedList("tmdb_v2_disney_movies", TTL_CATALOGS) {
+        tmdb.getDisneyMovies().results
+    }
+    suspend fun getHuluMovies() = cachedList("tmdb_v2_hulu_movies", TTL_CATALOGS) {
+        tmdb.getHuluMovies().results
+    }
+    suspend fun getParamountMovies() = cachedList("tmdb_v2_paramount_movies", TTL_CATALOGS) {
+        tmdb.getParamountMovies().results
+    }
+
+    // ── Streaming Platforms (Shows) ───────────────────────────
+    suspend fun getPrimeShows() = cachedList("tmdb_v2_prime_shows", TTL_CATALOGS) {
+        tmdb.getPrimeShows().results
+    }
+    suspend fun getDisneyShows() = cachedList("tmdb_v2_disney_shows", TTL_CATALOGS) {
+        tmdb.getDisneyShows().results
+    }
+    suspend fun getHuluShows() = cachedList("tmdb_v2_hulu_shows", TTL_CATALOGS) {
+        tmdb.getHuluShows().results
+    }
+    suspend fun getParamountShows() = cachedList("tmdb_v2_paramount_shows", TTL_CATALOGS) {
+        tmdb.getParamountShows().results
+    }
+    suspend fun getPeacockShows() = cachedList("tmdb_v2_peacock_shows", TTL_CATALOGS) {
+        tmdb.getPeacockShows().results
+    }
+
+    // ── Moods & Discovery (Movies) ────────────────────────────
+    suspend fun getNewReleaseMovies() = cachedList("tmdb_v2_new_releases", TTL_CATALOGS / 2) {
+        tmdb.getNewReleaseMovies().results
+    }
+    suspend fun getCriticallyAcclaimedMovies() = cachedList("tmdb_v2_acclaimed_movies", TTL_CATALOGS) {
+        tmdb.getCriticallyAcclaimedMovies().results
+    }
+    suspend fun getBoxOfficeMovies() = cachedList("tmdb_v2_boxoffice_movies", TTL_CATALOGS) {
+        tmdb.getBoxOfficeMovies().results
+    }
+    suspend fun getClassicMovies() = cachedList("tmdb_v2_classic_movies", TTL_GENRES) {
+        tmdb.getClassicMovies().results
+    }
+    suspend fun getKoreanMovies() = cachedList("tmdb_v2_korean_movies", TTL_CATALOGS) {
+        tmdb.getKoreanMovies().results
+    }
+    suspend fun getUpcomingMovies() = cachedList("tmdb_v2_upcoming_movies", TTL_CATALOGS / 2) {
+        tmdb.getUpcomingMovies().results
+    }
+
+    // ── Moods & Discovery (Shows) ─────────────────────────────
+    suspend fun getCriticallyAcclaimedShows() = cachedList("tmdb_v2_acclaimed_shows", TTL_CATALOGS) {
+        tmdb.getCriticallyAcclaimedShows().results
+    }
+    suspend fun getAnimeShows() = cachedList("tmdb_v2_anime_shows", TTL_CATALOGS) {
+        tmdb.getAnimeShows().results
+    }
+    suspend fun getRealityShows() = cachedList("tmdb_v2_reality_shows", TTL_CATALOGS) {
+        tmdb.getRealityShows().results
+    }
+    suspend fun getDocumentaryShows() = cachedList("tmdb_v2_documentary_shows", TTL_CATALOGS) {
+        tmdb.getDocumentaryShows().results
+    }
+    suspend fun getMiniSeries() = cachedList("tmdb_v2_miniseries", TTL_CATALOGS) {
+        tmdb.getMiniSeries().results
+    }
+    suspend fun getKidsShows() = cachedList("tmdb_v2_kids_shows", TTL_CATALOGS) {
+        tmdb.getKidsShows().results
+    }
+    suspend fun getKoreanDramas() = cachedList("tmdb_v2_korean_dramas", TTL_CATALOGS) {
+        tmdb.getKoreanDramas().results
+    }
+
     suspend fun getMoviesByGenre(tmdbGenreId: Int): List<TmdbMovie> = cachedList(
         "tmdb_v2_movies_g_$tmdbGenreId", TTL_CATALOGS
     ) { tmdb.discoverMovies("with_genres=$tmdbGenreId&sort_by=popularity.desc").results }

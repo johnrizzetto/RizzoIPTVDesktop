@@ -456,13 +456,29 @@ class MainViewModel(
     private fun loadVodCategories() = loadTmdb {
         val genres = tmdbRepository.getMovieGenres().map { Category(it.id.toString(), it.name) }
         val all = listOf(
-            Category("-1", "🔥 Popular"),
-            Category("-2", "⭐ Top Rated"),
-            Category("-3", "🎬 Now Playing"),
-            Category("-4", "📈 Trending"),
-            Category("-5", "🍿 Top Netflix"),
-            Category("-6", "🍎 Top Apple TV+"),
-            Category("-7", "🎭 Top HBO Max")
+            // ── FEATURED ───
+            Category("H:featured", "─── FEATURED ───"),
+            Category("-1",  "🔥 Popular"),
+            Category("-2",  "⭐ Top Rated"),
+            Category("-3",  "🎬 Now Playing"),
+            Category("-4",  "📈 Trending"),
+            // ── STREAMING ───
+            Category("H:platforms", "─── STREAMING ───"),
+            Category("-5",  "🍿 Netflix"),
+            Category("-6",  "🎬 Prime Video"),
+            Category("-7",  "✨ Disney+"),
+            Category("-8",  "📺 Hulu"),
+            Category("-9",  "🎭 Paramount+"),
+            // ── MOODS & DISCOVERY ───
+            Category("H:moods", "─── MOODS & DISCOVERY ───"),
+            Category("-10", "🆕 New Releases"),
+            Category("-11", "🏆 Critically Acclaimed"),
+            Category("-12", "💰 Box Office"),
+            Category("-13", "🎞️ Classics"),
+            Category("-14", "🇰🇷 Korean"),
+            Category("-15", "🔮 Upcoming"),
+            // ── GENRES ───
+            Category("H:genres", "─── GENRES ───")
         ) + genres
         BrowseContent.Categories(all, Section.VOD)
     }
@@ -470,13 +486,31 @@ class MainViewModel(
     private fun loadSeriesCategories() = loadTmdb {
         val genres = tmdbRepository.getTvGenres().map { Category(it.id.toString(), it.name) }
         val all = listOf(
-            Category("-1", "🔥 Popular"),
-            Category("-2", "⭐ Top Rated"),
-            Category("-3", "📺 Airing Today"),
-            Category("-4", "📈 Trending"),
-            Category("-5", "🍿 Top Netflix"),
-            Category("-6", "🍎 Top Apple TV+"),
-            Category("-7", "🎭 Top HBO Max")
+            // ── FEATURED ───
+            Category("H:featured", "─── FEATURED ───"),
+            Category("-1",  "🔥 Popular"),
+            Category("-2",  "⭐ Top Rated"),
+            Category("-3",  "📺 Airing Today"),
+            Category("-4",  "📈 Trending"),
+            // ── STREAMING ───
+            Category("H:platforms", "─── STREAMING ───"),
+            Category("-5",  "🍿 Netflix"),
+            Category("-6",  "🎬 Prime Video"),
+            Category("-7",  "✨ Disney+"),
+            Category("-8",  "📺 Hulu"),
+            Category("-9",  "🎭 Paramount+"),
+            Category("-10", "🦚 Peacock"),
+            // ── MOODS & DISCOVERY ───
+            Category("H:moods", "─── MOODS & DISCOVERY ───"),
+            Category("-11", "🏆 Critically Acclaimed"),
+            Category("-12", "🎌 Anime"),
+            Category("-13", "📺 Reality TV"),
+            Category("-14", "🎬 Documentaries"),
+            Category("-15", "📱 Mini Series"),
+            Category("-16", "👶 Kids"),
+            Category("-17", "🇰🇷 Korean Dramas"),
+            // ── GENRES ───
+            Category("H:genres", "─── GENRES ───")
         ) + genres
         BrowseContent.Categories(all, Section.SERIES)
     }
@@ -491,6 +525,7 @@ class MainViewModel(
     // ── Content selection ─────────────────────────────────────────────────
 
     fun selectCategory(category: Category, mode: Section, scrollPosition: Int = 0) {
+        if (category.id.startsWith("H:")) return
         backStack.addLast(_state.value.content to scrollPosition)
         if (mode == Section.LIVE) {
             load(pushBack = true) { creds ->
@@ -502,25 +537,43 @@ class MainViewModel(
                 loadTmdb(pushBack = true) {
                     if (mode == Section.VOD) {
                         val items = when (genreId) {
-                            -1 -> tmdbRepository.getPopularMovies()
-                            -2 -> tmdbRepository.getTopRatedMovies()
-                            -3 -> tmdbRepository.getNowPlayingMovies()
-                            -4 -> tmdbRepository.getTrendingMovies()
-                            -5 -> tmdbRepository.getNetflixMovies()
-                            -6 -> tmdbRepository.getAppleMovies()
-                            -7 -> tmdbRepository.getHboMovies()
+                            -1  -> tmdbRepository.getPopularMovies()
+                            -2  -> tmdbRepository.getTopRatedMovies()
+                            -3  -> tmdbRepository.getNowPlayingMovies()
+                            -4  -> tmdbRepository.getTrendingMovies()
+                            -5  -> tmdbRepository.getNetflixMovies()
+                            -6  -> tmdbRepository.getPrimeMovies()
+                            -7  -> tmdbRepository.getDisneyMovies()
+                            -8  -> tmdbRepository.getHuluMovies()
+                            -9  -> tmdbRepository.getParamountMovies()
+                            -10 -> tmdbRepository.getNewReleaseMovies()
+                            -11 -> tmdbRepository.getCriticallyAcclaimedMovies()
+                            -12 -> tmdbRepository.getBoxOfficeMovies()
+                            -13 -> tmdbRepository.getClassicMovies()
+                            -14 -> tmdbRepository.getKoreanMovies()
+                            -15 -> tmdbRepository.getUpcomingMovies()
                             else -> tmdbRepository.getPopularMovies()
                         }
                         BrowseContent.TmdbMovies(items, category.name)
                     } else {
                         val items = when (genreId) {
-                            -1 -> tmdbRepository.getPopularShows()
-                            -2 -> tmdbRepository.getTopRatedShows()
-                            -3 -> tmdbRepository.getOnTheAirShows()
-                            -4 -> tmdbRepository.getTrendingShows()
-                            -5 -> tmdbRepository.getNetflixShows()
-                            -6 -> tmdbRepository.getAppleShows()
-                            -7 -> tmdbRepository.getHboShows()
+                            -1  -> tmdbRepository.getPopularShows()
+                            -2  -> tmdbRepository.getTopRatedShows()
+                            -3  -> tmdbRepository.getOnTheAirShows()
+                            -4  -> tmdbRepository.getTrendingShows()
+                            -5  -> tmdbRepository.getNetflixShows()
+                            -6  -> tmdbRepository.getPrimeShows()
+                            -7  -> tmdbRepository.getDisneyShows()
+                            -8  -> tmdbRepository.getHuluShows()
+                            -9  -> tmdbRepository.getParamountShows()
+                            -10 -> tmdbRepository.getPeacockShows()
+                            -11 -> tmdbRepository.getCriticallyAcclaimedShows()
+                            -12 -> tmdbRepository.getAnimeShows()
+                            -13 -> tmdbRepository.getRealityShows()
+                            -14 -> tmdbRepository.getDocumentaryShows()
+                            -15 -> tmdbRepository.getMiniSeries()
+                            -16 -> tmdbRepository.getKidsShows()
+                            -17 -> tmdbRepository.getKoreanDramas()
                             else -> tmdbRepository.getPopularShows()
                         }
                         BrowseContent.TmdbShows(items, category.name)

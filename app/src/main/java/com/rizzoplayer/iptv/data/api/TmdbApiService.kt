@@ -109,6 +109,82 @@ class TmdbApiService(context: Context) {
     suspend fun discoverShows(queryParams: String): TmdbPage<TmdbShow> =
         fetchPage("$baseUrl/discover/tv?api_key=${BuildConfig.TMDB_BEARER}&$queryParams")
 
+    // TMDB Watch Provider IDs (US):
+    // 8=Netflix, 9=Amazon Prime, 15=Hulu, 337=Disney+, 350=Apple TV+,
+    // 384=Max/HBO, 386=Peacock, 531=Paramount+
+
+    // ── Streaming Platforms (Movies) ────────────────────────────
+    suspend fun getPrimeMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_watch_providers=9&watch_region=US&sort_by=popularity.desc")
+
+    suspend fun getDisneyMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_watch_providers=337&watch_region=US&sort_by=popularity.desc")
+
+    suspend fun getHuluMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_watch_providers=15&watch_region=US&sort_by=popularity.desc")
+
+    suspend fun getParamountMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_watch_providers=531&watch_region=US&sort_by=popularity.desc")
+
+    // ── Streaming Platforms (Shows) ─────────────────────────────
+    suspend fun getPrimeShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_watch_providers=9&watch_region=US&sort_by=popularity.desc")
+
+    suspend fun getDisneyShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_watch_providers=337&watch_region=US&sort_by=popularity.desc")
+
+    suspend fun getHuluShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_watch_providers=15&watch_region=US&sort_by=popularity.desc")
+
+    suspend fun getParamountShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_watch_providers=531&watch_region=US&sort_by=popularity.desc")
+
+    suspend fun getPeacockShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_watch_providers=386&watch_region=US&sort_by=popularity.desc")
+
+    // ── Moods & Discovery (Movies) ───────────────────────────────
+    suspend fun getNewReleaseMovies(): TmdbPage<TmdbMovie> {
+        val cutoff = java.time.LocalDate.now().minusDays(90).toString()
+        return discoverMovies("primary_release_date.gte=$cutoff&sort_by=popularity.desc&vote_count.gte=50")
+    }
+
+    suspend fun getCriticallyAcclaimedMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("vote_average.gte=8.0&vote_count.gte=500&sort_by=vote_average.desc")
+
+    suspend fun getBoxOfficeMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("sort_by=revenue.desc&vote_count.gte=100")
+
+    suspend fun getClassicMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("primary_release_date.lte=2000-01-01&vote_average.gte=7.5&vote_count.gte=200&sort_by=vote_average.desc")
+
+    suspend fun getKoreanMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_original_language=ko&sort_by=popularity.desc&vote_count.gte=50")
+
+    suspend fun getUpcomingMovies(): TmdbPage<TmdbMovie> =
+        fetchPage(tmdbUrl("/movie/upcoming"))
+
+    // ── Moods & Discovery (Shows) ────────────────────────────────
+    suspend fun getCriticallyAcclaimedShows(): TmdbPage<TmdbShow> =
+        discoverShows("vote_average.gte=8.0&vote_count.gte=200&sort_by=vote_average.desc")
+
+    suspend fun getAnimeShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_genres=16&with_original_language=ja&sort_by=popularity.desc")
+
+    suspend fun getRealityShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_genres=10764&sort_by=popularity.desc")
+
+    suspend fun getDocumentaryShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_genres=99&sort_by=popularity.desc")
+
+    suspend fun getMiniSeries(): TmdbPage<TmdbShow> =
+        discoverShows("with_type=3&sort_by=popularity.desc&vote_count.gte=50")
+
+    suspend fun getKidsShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_genres=10762&sort_by=popularity.desc")
+
+    suspend fun getKoreanDramas(): TmdbPage<TmdbShow> =
+        discoverShows("with_original_language=ko&sort_by=popularity.desc&vote_count.gte=30")
+
     private suspend inline fun <reified T> fetchPage(url: String): TmdbPage<T> =
         withContext(Dispatchers.IO) {
             val text = get(url)

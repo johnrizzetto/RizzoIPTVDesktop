@@ -497,11 +497,18 @@ private fun TmdbCategoriesContent(
     ) {
         items(items, key = { it.id }, contentType = { "Category" }) { cat ->
             val isFirst = items.firstOrNull()?.id == cat.id
-            CategoryRow(
-                category = cat,
-                onSelect = { onSelect(cat) },
-                modifier = if (isFirst) Modifier.focusRequester(firstItemFocusRequester) else Modifier
-            )
+            if (cat.id.startsWith("H:")) {
+                CategoryDivider(
+                    label = cat.name,
+                    modifier = if (isFirst) Modifier.focusRequester(firstItemFocusRequester) else Modifier
+                )
+            } else {
+                CategoryRow(
+                    category = cat,
+                    onSelect = { onSelect(cat) },
+                    modifier = if (isFirst) Modifier.focusRequester(firstItemFocusRequester) else Modifier
+                )
+            }
         }
     }
 }

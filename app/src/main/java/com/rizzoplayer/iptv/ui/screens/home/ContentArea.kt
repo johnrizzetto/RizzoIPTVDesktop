@@ -288,6 +288,24 @@ fun CategoryRow(category: Category, onSelect: () -> Unit, modifier: Modifier = M
     }
 }
 
+@Composable
+fun CategoryDivider(label: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextMuted.copy(alpha = 0.7f),
+            letterSpacing = 1.sp
+        )
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CHANNEL LIST
 // ═══════════════════════════════════════════════════════════════════════════
