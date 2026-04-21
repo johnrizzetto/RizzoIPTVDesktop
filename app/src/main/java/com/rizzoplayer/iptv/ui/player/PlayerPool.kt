@@ -121,23 +121,21 @@ object PlayerPool {
         .build()
 
     /**
-     * Live load control tuned for smooth sports / high-bitrate streams.
+     * Live load control tuned for low latency with light jitter protection.
      *
-     * minBufferMs (5 s): cushion before ExoPlayer considers the buffer dangerously low.
-     *   Raising from 2.5 s prevents micro-stutter on bursty HLS segment delivery
-     *   (fast-motion scenes, goal celebrations, etc.).
+     * minBufferMs (3 s): slightly more than stock (2.5 s) to absorb brief
+     *   network hiccups without triggering a stall.
      *
-     * maxBufferMs (20 s): let the player build a comfortable lead during good network
-     *   windows.  Adds ~2–3 s of live latency but eliminates rebuffers on WiFi/LAN.
+     * maxBufferMs (8 s): keeps the viewer close to the live edge (~3–5 s behind
+     *   broadcast) while leaving a little headroom for the player to fill during
+     *   good network windows.
      *
-     * bufferForPlaybackMs (2 s): require 2 s buffered before starting.  Avoids
-     *   immediate stutter on first segment arrival.
+     * bufferForPlaybackMs (1 s): start quickly on channel switch.
      *
-     * bufferForPlaybackAfterRebufferMs (5 s): after a stall, wait for a solid 5 s
-     *   before resuming so we don't immediately stutter again.
+     * bufferForPlaybackAfterRebufferMs (2 s): resume promptly after a genuine stall.
      */
     private val LIVE_LOAD_CONTROL = DefaultLoadControl.Builder()
-        .setBufferDurationsMs(5_000, 20_000, 2_000, 5_000)
+        .setBufferDurationsMs(3_000, 8_000, 1_000, 2_000)
         .build()
 
     // ──── Internal types ────────────────────────────────────────────────────
