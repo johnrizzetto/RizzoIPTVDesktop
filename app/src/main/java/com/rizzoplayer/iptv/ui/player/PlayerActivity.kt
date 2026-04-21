@@ -250,6 +250,7 @@ class PlayerActivity : ComponentActivity() {
     private fun savePositionNow() {
         val p = player ?: return
         if (contentId.isEmpty()) return
+        if (!isVod) return  // live streams have no meaningful resume position
         val key = "${contentType}:${contentId}"
         val positionMs = p.currentPosition
         val durationMs = p.duration.coerceAtLeast(0)
@@ -1473,7 +1474,7 @@ private fun TrackPickerPanel(
     val speedFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
-        delay(80)
+        withFrameNanos { }
         try { progressFocus.requestFocus() } catch (_: Exception) {}
     }
 
