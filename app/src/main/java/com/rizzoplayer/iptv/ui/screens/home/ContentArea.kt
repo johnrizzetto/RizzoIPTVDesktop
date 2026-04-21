@@ -237,6 +237,7 @@ private fun CategoryList(
 ) {
     val firstItemFocusRequester = remember { FocusRequester() }
     LaunchedEffect(items) {
+        withFrameNanos { }
         try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
     }
     LazyColumn(
@@ -319,7 +320,10 @@ private fun ChannelList(
     onFavToggle: (LiveStream) -> Unit
 ) {
     val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(items) { try { firstFocus.requestFocus() } catch (_: Exception) {} }
+    LaunchedEffect(items) {
+        withFrameNanos { }
+        try { firstFocus.requestFocus() } catch (_: Exception) {}
+    }
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -388,7 +392,10 @@ private fun ContentGrid(
     onFavToggle: (VodStream) -> Unit
 ) {
     val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(items) { try { firstFocus.requestFocus() } catch (_: Exception) {} }
+    LaunchedEffect(items) {
+        withFrameNanos { }
+        try { firstFocus.requestFocus() } catch (_: Exception) {}
+    }
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -421,7 +428,10 @@ private fun SeriesGrid(
     onFavToggle: (Series) -> Unit
 ) {
     val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(items) { try { firstFocus.requestFocus() } catch (_: Exception) {} }
+    LaunchedEffect(items) {
+        withFrameNanos { }
+        try { firstFocus.requestFocus() } catch (_: Exception) {}
+    }
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -513,7 +523,10 @@ private fun EpisodesView(
     onFavToggle: (Episode) -> Unit
 ) {
     val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(episodes) { try { firstFocus.requestFocus() } catch (_: Exception) {} }
+    LaunchedEffect(episodes) {
+        withFrameNanos { }
+        try { firstFocus.requestFocus() } catch (_: Exception) {}
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
         contentPadding = PaddingValues(vertical = 4.dp),

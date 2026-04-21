@@ -215,7 +215,10 @@ fun TmdbMovieGrid(
     val context = LocalContext.current
     val imageLoader = remember { Coil.imageLoader(context) }
 
-    LaunchedEffect(content.items) { try { firstFocus.requestFocus() } catch (_: Exception) {} }
+    LaunchedEffect(content.items) {
+        withFrameNanos { } // ensure layout is attached before requesting focus
+        try { firstFocus.requestFocus() } catch (_: Exception) {}
+    }
 
     LaunchedEffect(listState.firstVisibleItemIndex) {
         val firstVisible = listState.firstVisibleItemIndex

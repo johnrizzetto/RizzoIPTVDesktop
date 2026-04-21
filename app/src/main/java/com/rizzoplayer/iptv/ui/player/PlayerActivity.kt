@@ -1079,7 +1079,7 @@ private fun QuickSwitchOverlay(
 
     LaunchedEffect(requestFocus.value) {
         if (requestFocus.value) {
-            delay(150)
+            withFrameNanos { } // one frame for layout, no arbitrary delay
             try { firstCardFocus.requestFocus() } catch (_: Exception) {}
             requestFocus.value = false
         }

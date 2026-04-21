@@ -107,12 +107,14 @@ fun Sidebar(
                 onClick = {
                     onSelectSection(entry.route)
                     scope.launch {
-                        for (i in 1..20) {
+                        // One frame is usually enough for the NavHost to mount the destination.
+                        // A single short fallback covers slow devices without the 2-second old loop.
+                        kotlinx.coroutines.delay(32)
+                        try {
+                            contentFocusRestorer.requestFocus()
+                        } catch (_: Exception) {
                             kotlinx.coroutines.delay(100)
-                            try {
-                                contentFocusRestorer.requestFocus()
-                                break
-                            } catch (_: Exception) {}
+                            try { contentFocusRestorer.requestFocus() } catch (_: Exception) {}
                         }
                     }
                 },
@@ -130,8 +132,13 @@ fun Sidebar(
                 onClick = {
                     onBack()
                     scope.launch {
-                        kotlinx.coroutines.delay(100)
-                        try { contentFocusRestorer.requestFocus() } catch (_: Exception) {}
+                        kotlinx.coroutines.delay(32)
+                        try {
+                            contentFocusRestorer.requestFocus()
+                        } catch (_: Exception) {
+                            kotlinx.coroutines.delay(100)
+                            try { contentFocusRestorer.requestFocus() } catch (_: Exception) {}
+                        }
                     }
                 },
             )

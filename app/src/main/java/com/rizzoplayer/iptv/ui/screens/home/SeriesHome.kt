@@ -277,15 +277,12 @@ fun TmdbShowDetailView(
     val episodeFocus = remember { FocusRequester() }
     var episodeFocusTrigger by remember { mutableIntStateOf(0) }
 
+    // Single effect — fires on initial composition (trigger = 0 means "initial load")
+    // and re-fires each time the user switches seasons (trigger increments).
+    // LaunchedEffect(Unit) removed: it raced with the trigger effect and caused
+    // erratic focus on every recomposition.
     LaunchedEffect(episodeFocusTrigger) {
-        if (episodeFocusTrigger > 0) {
-            kotlinx.coroutines.delay(80)
-            try { episodeFocus.requestFocus() } catch (_: Exception) {}
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(120)
+        withFrameNanos { } // wait for layout to attach the focusRequester
         try { episodeFocus.requestFocus() } catch (_: Exception) {}
     }
 

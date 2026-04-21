@@ -88,10 +88,14 @@ fun HomeScreen(viewModel: MainViewModel) {
         label = "sidebar",
     )
 
-    // Focus requester for the NavHost content area (first focusable item lands here on section change)
+    // Focus requester for the NavHost content area — sidebar pushes focus here on nav
     val contentFocusRestorer = remember { FocusRequester() }
-    // Flag: set when NavHost Box receives focus, read by content to redirect focus to first item
-    var shouldFocusFirstItem by remember { mutableStateOf(false) }
+    // Incremented each time content should steal focus from sidebar (or on initial entry).
+    // LaunchedEffect keys on this int so each sidebar tap re-fires the focus request.
+    var focusContentTick by remember { mutableStateOf(0) }
+    // Legacy alias kept so content composables don't need a rename pass — they treat any
+    // nonzero value as "please focus your first item."
+    val shouldFocusFirstItem = focusContentTick > 0
 
     // Navigate + update ViewModel state in one call
     val navigateAndSelectSection: (String) -> Unit = { route ->
@@ -164,13 +168,14 @@ fun HomeScreen(viewModel: MainViewModel) {
                 }
             }
 
-            // NavHost content
+            // NavHost content — focusGroup routes requestFocus() to nearest child instead
+            // of absorbing it directly. onFocusChanged(hasFocus) fires for child focus too.
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .focusRequester(contentFocusRestorer)
-                    .focusable()
-                    .onFocusChanged { if (it.isFocused) shouldFocusFirstItem = true }
+                    .focusGroup()
+                    .onFocusChanged { if (it.hasFocus) focusContentTick++ }
             ) {
                 NavHost(
                     navController = navController,
@@ -477,15 +482,14 @@ private fun TmdbCategoriesContent(
 ) {
     val listState = rememberLazyListState()
     val firstItemFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(items) {
-        kotlinx.coroutines.delay(200)
-        try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
-        kotlinx.coroutines.delay(50)
-        try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
-    }
+    // First *selectable* item — skip non-focusable header rows (id starts with "H:")
+    val firstSelectableId = remember(items) { items.firstOrNull { !it.id.startsWith("H:") }?.id }
+
+    // Single effect keyed on shouldFocusFirstItem (an incrementing tick) so each sidebar
+    // navigation re-triggers focus. One frame wait is enough for layout to be attached.
     LaunchedEffect(shouldFocusFirstItem) {
-        if (shouldFocusFirstItem) {
-            kotlinx.coroutines.delay(50)
+        if (firstSelectableId != null) {
+            withFrameNanos { } // wait for the current frame to finish layout
             try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
         }
     }
@@ -495,18 +499,15 @@ private fun TmdbCategoriesContent(
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
-        items(items, key = { it.id }, contentType = { "Category" }) { cat ->
-            val isFirst = items.firstOrNull()?.id == cat.id
+        items(items, key = { it.id }, contentType = { if (it.id.startsWith("H:")) "Header" else "Category" }) { cat ->
+            val isFirstSelectable = cat.id == firstSelectableId
             if (cat.id.startsWith("H:")) {
-                CategoryDivider(
-                    label = cat.name,
-                    modifier = if (isFirst) Modifier.focusRequester(firstItemFocusRequester) else Modifier
-                )
+                CategoryDivider(label = cat.name)
             } else {
                 CategoryRow(
                     category = cat,
                     onSelect = { onSelect(cat) },
-                    modifier = if (isFirst) Modifier.focusRequester(firstItemFocusRequester) else Modifier
+                    modifier = if (isFirstSelectable) Modifier.focusRequester(firstItemFocusRequester) else Modifier
                 )
             }
         }
