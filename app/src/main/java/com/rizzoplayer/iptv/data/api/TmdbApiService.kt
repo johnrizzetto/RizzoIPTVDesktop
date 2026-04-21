@@ -22,6 +22,14 @@ import okhttp3.Response
 class TmdbApiService(context: Context) {
 
     private val client = NetworkClient.base(context).newBuilder()
+        // Inject Bearer token on every TMDB request (v4 read-access token)
+        .addInterceptor { chain: Interceptor.Chain ->
+            val request = chain.request().newBuilder()
+                .header("Authorization", "Bearer ${BuildConfig.TMDB_BEARER}")
+                .build()
+            chain.proceed(request)
+        }
+        // stale-while-revalidate cache policy on responses
         .addNetworkInterceptor { chain: Interceptor.Chain ->
             val response = chain.proceed(chain.request())
             val path = chain.request().url.encodedPath
@@ -55,7 +63,7 @@ class TmdbApiService(context: Context) {
 
     private fun tmdbUrl(path: String, vararg pairs: Pair<String, String>): String {
         val params = pairs.joinToString("&") { (k, v) -> "$k=$v" }
-        return "$baseUrl$path?api_key=${BuildConfig.TMDB_BEARER}&$params"
+        return if (params.isEmpty()) "$baseUrl$path" else "$baseUrl$path?$params"
     }
 
     suspend fun getPopularMovies(page: Int = 1): TmdbPage<TmdbMovie> =
@@ -104,10 +112,10 @@ class TmdbApiService(context: Context) {
         fetchPage(tmdbUrl("/trending/tv/week"))
 
     suspend fun discoverMovies(queryParams: String): TmdbPage<TmdbMovie> =
-        fetchPage("$baseUrl/discover/movie?api_key=${BuildConfig.TMDB_BEARER}&$queryParams")
+        fetchPage("$baseUrl/discover/movie?$queryParams")
 
     suspend fun discoverShows(queryParams: String): TmdbPage<TmdbShow> =
-        fetchPage("$baseUrl/discover/tv?api_key=${BuildConfig.TMDB_BEARER}&$queryParams")
+        fetchPage("$baseUrl/discover/tv?$queryParams")
 
     // TMDB Watch Provider IDs (US):
     // 8=Netflix, 9=Amazon Prime, 15=Hulu, 337=Disney+, 350=Apple TV+,
