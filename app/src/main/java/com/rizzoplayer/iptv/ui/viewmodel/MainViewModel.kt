@@ -66,15 +66,6 @@ data class PlaybackPrep(
 }
 
 @Immutable
-data class StreamSelectionState(
-    val streams: List<UnifiedTorrent>,
-    val title: String,
-    val contentType: String,
-    val contentId: String,
-    val icon: String?
-)
-
-@Immutable
 data class TmdbStreamSelectionState(
     val streams: List<UnifiedTorrent>,
     val title: String,
@@ -99,7 +90,6 @@ data class MainUiState(
     val restoreGridScrollIndex: Int = -1,
     val currentGridScrollPosition: Int = 0,
     val isGridLoading: Boolean = false,
-    val streamSelection: StreamSelectionState? = null,
     val tmdbStreamSelection: TmdbStreamSelectionState? = null,
     val playbackPrep: PlaybackPrep? = null,
     val parentalLockActive: Boolean = false,
@@ -1057,87 +1047,6 @@ class MainViewModel(
                 _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to play favorite") }
             }
         }
-    }
-
-    fun playSelectedStream(stream: TorrentioStream) {
-        val selection = _state.value.streamSelection ?: return
-        currentFallbackHashes = emptyList()
-        currentPlaybackTitle = ""
-        viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, streamSelection = null) }
-            val resolvedUrl = resolveStreamUrl(stream.url)
-            val recent = RecentItem(selection.contentId, selection.title, selection.contentType, selection.icon)
-            _state.update { it.copy(isLoading = false, nowPlaying = recent) }
-            repository.recentlyWatchedStore.add(recent)
-            _playEvent.tryEmit(PlayEvent(
-                url = resolvedUrl,
-                title = selection.title,
-                contentType = selection.contentType,
-                contentId = selection.contentId
-            ))
-        }
-    }
-
-    // Handles UnifiedTorrent from the IPTV stream-selection path (StreamSelectionState).
-    // IPTV streams have hash==null and carry direct HLS URLs — play them directly.
-    // Torrent streams have hash!=null — go through TorBox resolve for debrid caching.
-    fun playSelectedUnifiedStream(stream: UnifiedTorrent) {
-        val selection = _state.value.streamSelection ?: return
-        _state.update { it.copy(streamSelection = null) }
-        currentFallbackHashes = selection.streams
-            .filter { it.url != stream.url }
-            .mapNotNull { it.hash }
-            .distinct()
-            .take(5)
-        currentPlaybackTitle = selection.title
-        currentContentType = selection.contentType
-        viewModelScope.launch {
-            if (stream.hash == null) {
-                // Direct HLS URL — no TorBox caching needed
-                _state.update { it.copy(isLoading = false) }
-                val recent = RecentItem(selection.contentId, selection.title, selection.contentType, selection.icon)
-                _state.update { it.copy(nowPlaying = recent) }
-                repository.recentlyWatchedStore.add(recent)
-                val recentRefs = buildRecentRefsFromCache(excludeId = selection.contentId)
-                val favRefs = buildFavoriteRefsFromCache(excludeId = selection.contentId)
-                _playEvent.tryEmit(PlayEvent(stream.url, selection.title, selection.contentType, recentRefs, favRefs))
-            } else {
-                // Torrent — resolve through TorBox for debrid
-                _state.update { it.copy(isLoading = true) }
-                playbackPrepJob?.cancel()
-                playbackPrepJob = viewModelScope.launch {
-                    torBoxRepository.resolveFallback(stream.hash).collect { resolution ->
-                        when (resolution) {
-                            is StreamResolution.Searching -> {
-                                _state.update { it.copy(playbackPrep = PlaybackPrep(selection.title, PlaybackPrep.Stage.SEARCHING, "Searching torrent...")) }
-                            }
-                            is StreamResolution.Queuing -> {
-                                _state.update { it.copy(playbackPrep = PlaybackPrep(selection.title, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")) }
-                            }
-                            is StreamResolution.Caching -> {
-                                _state.update { it.copy(playbackPrep = PlaybackPrep(selection.title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
-                            }
-                            is StreamResolution.Ready -> {
-                                _state.update { it.copy(playbackPrep = null) }
-                                val recent = RecentItem(selection.contentId, selection.title, selection.contentType, selection.icon)
-                                _state.update { it.copy(isLoading = false, nowPlaying = recent) }
-                                repository.recentlyWatchedStore.add(recent)
-                                val recentRefs = buildRecentRefsFromCache(excludeId = selection.contentId)
-                                val favRefs = buildFavoriteRefsFromCache(excludeId = selection.contentId)
-                                _playEvent.tryEmit(PlayEvent(resolution.url, selection.title, selection.contentType, recentRefs, favRefs))
-                            }
-                            is StreamResolution.Failed -> {
-                                _state.update { it.copy(playbackPrep = null, error = resolution.reason) }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fun dismissStreamSelection() {
-        _state.update { it.copy(streamSelection = null) }
     }
 
     // ── EPG ──────────────────────────────────────────────────────────────

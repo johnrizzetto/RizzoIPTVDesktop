@@ -246,15 +246,6 @@ fun HomeScreen(viewModel: MainViewModel) {
             }
         }
 
-        state.streamSelection?.let { selection ->
-            PremiumStreamSelectionOverlay(
-                title = selection.title,
-                streams = selection.streams,
-                onSelect = viewModel::playSelectedUnifiedStream,
-                onDismiss = viewModel::dismissStreamSelection,
-            )
-        }
-
         state.tmdbStreamSelection?.let { selection ->
             PremiumStreamSelectionOverlay(
                 title = selection.title,
