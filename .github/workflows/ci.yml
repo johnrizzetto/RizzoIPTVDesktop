@@ -6,7 +6,9 @@ on:
       - "**.md"
       - "docs/**"
   push:
-    branches: [main]
+    branches:
+      - main
+      - claude/romantic-leakey-57e175-work
     paths-ignore:
       - "**.md"
       - "docs/**"
