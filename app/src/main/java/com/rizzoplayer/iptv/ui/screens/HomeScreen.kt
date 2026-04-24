@@ -349,7 +349,9 @@ private fun MoviesContent(
                     TmdbSearchResultsContent(
                         content = searchContent,
                         favorites = favorites,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        filter = "movies",
+                        isLoading = state.isGridLoading
                     )
                 } else {
                     EmptyHint("No movies found")
@@ -384,6 +386,7 @@ private fun MoviesContent(
                         )
                     },
                     onPlayRecent = viewModel::onPlayRecent,
+                    isGridLoading = state.isGridLoading,
                     initialScrollIndex = state.restoreGridScrollIndex,
                     onScrollRestored = viewModel::clearGridScrollRestore,
                     onScrollPositionChange = { viewModel.updateGridScroll(it) }
@@ -434,7 +437,9 @@ private fun ShowsContent(
                     TmdbSearchResultsContent(
                         content = searchContent,
                         favorites = favorites,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        filter = "shows",
+                        isLoading = state.isGridLoading
                     )
                 } else {
                     EmptyHint("No shows found")
@@ -469,6 +474,7 @@ private fun ShowsContent(
                         )
                     },
                     onPlayRecent = viewModel::onPlayRecent,
+                    isGridLoading = state.isGridLoading,
                     initialScrollIndex = state.restoreGridScrollIndex,
                     onScrollRestored = viewModel::clearGridScrollRestore,
                     onScrollPositionChange = { viewModel.updateGridScroll(it) }

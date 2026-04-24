@@ -28,10 +28,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -53,8 +54,14 @@ import com.rizzoplayer.iptv.data.model.TmdbMovie
 import com.rizzoplayer.iptv.ui.theme.*
 import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 
 @Composable
 fun MoviesHome(
@@ -64,6 +71,7 @@ fun MoviesHome(
     onSelectMovie: (TmdbMovie) -> Unit,
     onToggleFavorite: (TmdbMovie) -> Unit,
     onPlayRecent: ((RecentItem) -> Unit)? = null,
+    isGridLoading: Boolean = false,
     initialScrollIndex: Int = -1,
     onScrollRestored: () -> Unit = {},
     onScrollPositionChange: (Int) -> Unit = {}
@@ -204,6 +212,7 @@ fun MoviesHome(
                 favorites = favorites,
                 onSelectMovie = onSelectMovie,
                 onToggleFavorite = onToggleFavorite,
+                isGridLoading = isGridLoading,
                 initialScrollIndex = initialScrollIndex,
                 onScrollRestored = onScrollRestored,
                 onScrollPositionChange = onScrollPositionChange
@@ -219,6 +228,7 @@ fun TmdbMovieGrid(
     favorites: Map<String, Favorite>,
     onSelectMovie: (TmdbMovie) -> Unit,
     onToggleFavorite: (TmdbMovie) -> Unit,
+    isGridLoading: Boolean = false,
     initialScrollIndex: Int = -1,
     onScrollRestored: () -> Unit = {},
     onScrollPositionChange: (Int) -> Unit = {}
@@ -266,30 +276,34 @@ fun TmdbMovieGrid(
             .collect { idx -> onScrollPositionChange(idx) }
     }
 
-    LazyVerticalGrid(
-        state = listState,
-        columns = GridCells.Adaptive(120.dp),
-        modifier = Modifier
-            .fillMaxSize()
-            .gridTopRowFocus(firstFocus),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(content.items, key = { it.id }, contentType = { "TmdbMovie" }) { movie ->
-            val isFirst = content.items.firstOrNull()?.id == movie.id
-            TmdbPosterCard(
-                title = movie.title,
-                posterPath = movie.posterPath,
-                rating = movie.rating,
-                year = movie.releaseDate.take(4),
-                overview = movie.overview,
-                isFavorite = favorites.containsKey(movie.id.toString()),
-                onClick = { onSelectMovie(movie) },
-                onLongClick = { onToggleFavorite(movie) },
+    if (isGridLoading) {
+        ShimmerMovieGrid()
+    } else {
+        LazyVerticalGrid(
+            state = listState,
+            columns = GridCells.Adaptive(120.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .gridTopRowFocus(firstFocus),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(content.items, key = { it.id }, contentType = { "TmdbMovie" }) { movie ->
+                val isFirst = content.items.firstOrNull()?.id == movie.id
+                TmdbPosterCard(
+                    title = movie.title,
+                    posterPath = movie.posterPath,
+                    rating = movie.rating,
+                    year = movie.releaseDate.take(4),
+                    overview = movie.overview,
+                    isFavorite = favorites.containsKey(movie.id.toString()),
+                    onClick = { onSelectMovie(movie) },
+                    onLongClick = { onToggleFavorite(movie) },
 
-                modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier
-            )
+                    modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier
+                )
+            }
         }
     }
 }
@@ -429,5 +443,98 @@ private fun PosterFallback(title: String, height: androidx.compose.ui.unit.Dp = 
         contentAlignment = Alignment.Center
     ) {
         Text(title.take(2).uppercase(), color = TextMuted, fontSize = 28.sp)
+    }
+}
+
+// ── Shimmer skeleton ────────────────────────────────────────────────────────
+
+private val ShimmerColors = listOf(
+    ShimmerBase,
+    ShimmerHighlight,
+    ShimmerBase
+)
+
+@Composable
+private fun shimmerBrush(): Brush {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer"
+    )
+    return Brush.linearGradient(
+        colors = ShimmerColors,
+        start = Offset(translateAnim - 400f, translateAnim - 400f),
+        end = Offset(translateAnim, translateAnim)
+    )
+}
+
+@Composable
+private fun ShimmerPosterCard(modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier.width(120.dp),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .background(shimmerBrush())
+            )
+            Column(Modifier.padding(8.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(12.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(shimmerBrush())
+                )
+                Spacer(Modifier.height(4.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.5f)
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(shimmerBrush())
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ShimmerMovieGrid(modifier: Modifier = Modifier) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(120.dp),
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(20, contentType = { "shimmer" }) {
+            ShimmerPosterCard()
+        }
+    }
+}
+
+@Composable
+fun ShimmerShowGrid(modifier: Modifier = Modifier) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(120.dp),
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(20, contentType = { "shimmer" }) {
+            ShimmerPosterCard()
+        }
     }
 }

@@ -98,6 +98,7 @@ data class MainUiState(
     val restoreScrollIndex: Int = -1,
     val restoreGridScrollIndex: Int = -1,
     val currentGridScrollPosition: Int = 0,
+    val isGridLoading: Boolean = false,
     val streamSelection: StreamSelectionState? = null,
     val tmdbStreamSelection: TmdbStreamSelectionState? = null,
     val playbackPrep: PlaybackPrep? = null,
@@ -1232,15 +1233,25 @@ class MainViewModel(
 
     private fun loadTmdb(block: suspend () -> BrowseContent) {
         lastTmdbBlock = block
-        _state.update { it.copy(isLoading = true, error = null) }
+        _state.update { it.copy(isLoading = true, isGridLoading = true, error = null) }
         viewModelScope.launch {
             try {
                 val content = withContext(Dispatchers.IO) { block() }
-                _state.update { it.copy(isLoading = false, content = content, canGoBack = backStack.isNotEmpty()) }
+                _state.update { it.copy(isLoading = false, isGridLoading = false, content = content, canGoBack = backStack.isNotEmpty()) }
             } catch (e: Exception) {
-                _state.update { it.copy(isLoading = false, error = e.message ?: "Unknown error") }
+                _state.update { it.copy(isLoading = false, isGridLoading = false, error = e.message ?: "Unknown error") }
             }
         }
+    }
+
+    /** Set shimmer loading state immediately (before content fetch) so shimmer renders while hero stays visible. */
+    fun setGridLoading() {
+        _state.update { it.copy(isGridLoading = true) }
+    }
+
+    /** Clear shimmer loading state. */
+    fun clearGridLoading() {
+        _state.update { it.copy(isGridLoading = false) }
     }
 
     private fun List<Category>.sortedByUS() = sortedWith { a, b ->

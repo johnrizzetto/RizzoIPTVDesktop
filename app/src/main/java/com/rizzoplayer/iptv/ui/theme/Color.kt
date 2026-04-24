@@ -27,7 +27,9 @@ val NavActive = Color(0xFF0D0D2E)
 val NavHover = Color(0xFF141430)
 val NavFocusBg = Color(0xFF1A1A40)
 
-// ── Semantic ─────────────────────────────────────────────────────────────────
+// ── Shimmer skeleton ──────────────────────────────────────────────────────────
+val ShimmerBase = Color(0xFF1A1A2E)
+val ShimmerHighlight = Color(0xFF2A2A4E)
 val Gold = Color(0xFFFFB800)
 val RedColor = Color(0xFFEF4444)
 

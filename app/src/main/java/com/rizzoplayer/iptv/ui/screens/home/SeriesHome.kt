@@ -62,6 +62,7 @@ fun SeriesHome(
     onSelectShow: (TmdbShow) -> Unit,
     onToggleFavorite: (TmdbShow) -> Unit,
     onPlayRecent: ((RecentItem) -> Unit)? = null,
+    isGridLoading: Boolean = false,
     initialScrollIndex: Int = -1,
     onScrollRestored: () -> Unit = {},
     onScrollPositionChange: (Int) -> Unit = {}
@@ -201,6 +202,7 @@ fun SeriesHome(
                 favorites = favorites,
                 onSelectShow = onSelectShow,
                 onToggleFavorite = onToggleFavorite,
+                isGridLoading = isGridLoading,
                 initialScrollIndex = initialScrollIndex,
                 onScrollRestored = onScrollRestored,
                 onScrollPositionChange = onScrollPositionChange
@@ -215,6 +217,7 @@ fun TmdbShowGrid(
     favorites: Map<String, Favorite>,
     onSelectShow: (TmdbShow) -> Unit,
     onToggleFavorite: (TmdbShow) -> Unit,
+    isGridLoading: Boolean = false,
     initialScrollIndex: Int = -1,
     onScrollRestored: () -> Unit = {},
     onScrollPositionChange: (Int) -> Unit = {}
@@ -262,32 +265,36 @@ fun TmdbShowGrid(
             .collect { idx -> onScrollPositionChange(idx) }
     }
 
-    LazyVerticalGrid(
-        state = listState,
-        columns = GridCells.Adaptive(120.dp),
-        modifier = Modifier
-            .fillMaxSize()
-            .gridTopRowFocus(firstFocus),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(content.items, key = { it.id }, contentType = { "TmdbShow" }) { show ->
-            val isFirst = content.items.firstOrNull()?.id == show.id
-            TmdbPosterCard(
-                title = show.name,
-                posterPath = show.posterPath,
-                rating = show.rating,
-                year = show.firstAirDate.take(4),
-                overview = show.overview,
-                isFavorite = favorites.containsKey(show.id.toString()),
-                onClick = { onSelectShow(show) },
-                onLongClick = { onToggleFavorite(show) },
+    if (isGridLoading) {
+        ShimmerShowGrid()
+    } else {
+        LazyVerticalGrid(
+            state = listState,
+            columns = GridCells.Adaptive(120.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .gridTopRowFocus(firstFocus),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(content.items, key = { it.id }, contentType = { "TmdbShow" }) { show ->
+                val isFirst = content.items.firstOrNull()?.id == show.id
+                TmdbPosterCard(
+                    title = show.name,
+                    posterPath = show.posterPath,
+                    rating = show.rating,
+                    year = show.firstAirDate.take(4),
+                    overview = show.overview,
+                    isFavorite = favorites.containsKey(show.id.toString()),
+                    onClick = { onSelectShow(show) },
+                    onLongClick = { onToggleFavorite(show) },
 
-                modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier,
-                cardWidth = 120.dp,
-                posterHeight = 180.dp
-            )
+                    modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier,
+                    cardWidth = 120.dp,
+                    posterHeight = 180.dp
+                )
+            }
         }
     }
 }
