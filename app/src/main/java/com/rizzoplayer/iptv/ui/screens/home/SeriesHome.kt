@@ -52,6 +52,7 @@ import com.rizzoplayer.iptv.data.model.TmdbSeason
 import com.rizzoplayer.iptv.data.model.TmdbShow
 import com.rizzoplayer.iptv.ui.theme.*
 import com.rizzoplayer.iptv.ui.theme.gridTopRowFocus
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusGroup
 import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
 
 @Composable
@@ -273,6 +274,7 @@ fun TmdbShowGrid(
             columns = GridCells.Adaptive(120.dp),
             modifier = Modifier
                 .fillMaxSize()
+                .rizzoFocusGroup()
                 .gridTopRowFocus(firstFocus),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

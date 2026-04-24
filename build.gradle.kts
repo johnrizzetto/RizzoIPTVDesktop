@@ -4,3 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.ktlint) apply true
 }
+
+ktlint {
+    android.set(true)
+    ignoreFailures = false
+}

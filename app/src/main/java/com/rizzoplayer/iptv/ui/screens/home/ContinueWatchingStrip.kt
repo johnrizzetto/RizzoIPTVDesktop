@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +31,8 @@ import com.rizzoplayer.iptv.AppConfig
 import com.rizzoplayer.iptv.RizzoApp
 import com.rizzoplayer.iptv.data.local.PlaybackPositionStore
 import com.rizzoplayer.iptv.data.model.RecentItem
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusGroup
+import com.rizzoplayer.iptv.ui.designsystem.RizzoProgressBar
 import com.rizzoplayer.iptv.ui.theme.*
 
 @Composable
@@ -46,7 +47,7 @@ fun ContinueWatchingStrip(items: List<RecentItem>, onPlay: (RecentItem) -> Unit)
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
         )
         LazyRow(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().rizzoFocusGroup(),
             contentPadding = PaddingValues(horizontal = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -92,10 +93,10 @@ private fun RecentCard(item: RecentItem, store: PlaybackPositionStore, onClick: 
             )
         }
         if (fraction > 0f && fraction < 0.98f) {
-            LinearProgressIndicator(
-                progress = { fraction },
+            RizzoProgressBar(
+                progress = fraction,
                 modifier = Modifier.fillMaxWidth().height(2.dp),
-                color = AccentBlue,
+                fillColor = AccentBlue,
                 trackColor = CardBg
             )
         }

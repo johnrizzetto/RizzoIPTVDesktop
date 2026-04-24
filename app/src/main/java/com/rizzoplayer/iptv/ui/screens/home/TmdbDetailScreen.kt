@@ -1,32 +1,23 @@
 package com.rizzoplayer.iptv.ui.screens.home
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,10 +26,21 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.size.Size
 import com.rizzoplayer.iptv.AppConfig
-import com.rizzoplayer.iptv.data.model.Favorite
 import com.rizzoplayer.iptv.data.model.TmdbMovie
 import com.rizzoplayer.iptv.data.model.TmdbShow
-import com.rizzoplayer.iptv.ui.theme.*
+import com.rizzoplayer.iptv.ui.designsystem.RizzoButton
+import com.rizzoplayer.iptv.ui.designsystem.RizzoIconButton
+import com.rizzoplayer.iptv.ui.designsystem.RizzoText
+import com.rizzoplayer.iptv.ui.designsystem.RizzoTextStyle
+import com.rizzoplayer.iptv.ui.theme.AccentBlue
+import com.rizzoplayer.iptv.ui.theme.BrandGold
+import com.rizzoplayer.iptv.ui.theme.MainBg
+import com.rizzoplayer.iptv.ui.theme.RedColor
+import com.rizzoplayer.iptv.ui.theme.RizzoAccent
+import com.rizzoplayer.iptv.ui.theme.RizzoTextSecondary
+import com.rizzoplayer.iptv.ui.theme.RizzoTextTertiary
+
+// ─── Movie Detail ────────────────────────────────────────────────────────────
 
 @Composable
 fun TmdbMovieDetailView(
@@ -48,7 +50,6 @@ fun TmdbMovieDetailView(
     onToggleFavorite: () -> Unit,
     viewModel: com.rizzoplayer.iptv.ui.viewmodel.MainViewModel,
 ) {
-    // Speculatively prefetch stream so playback starts faster
     LaunchedEffect(movie.imdbId) {
         movie.imdbId?.let { viewModel.prefetchStream(it) }
     }
@@ -96,10 +97,7 @@ fun TmdbMovieDetailView(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 48.dp)
         ) {
-            item {
-                // Top spacer for backdrop breathing room
-                Spacer(modifier = Modifier.height(120.dp))
-            }
+            item { Spacer(modifier = Modifier.height(120.dp)) }
 
             item {
                 Row(
@@ -108,7 +106,7 @@ fun TmdbMovieDetailView(
                         .padding(horizontal = 24.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Poster
+                    // Poster thumbnail
                     if (posterUrl != null) {
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
@@ -129,62 +127,49 @@ fun TmdbMovieDetailView(
                     }
 
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            movie.title,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
+                        // Title
+                        RizzoText(
+                            style = RizzoTextStyle.HeadingSm,
+                            text = movie.title,
                             color = Color.White,
                             maxLines = 3,
-                            overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
+
+                        // Metadata row: year | rating | runtime
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            movie.releaseDate.take(4).let { if (it.isNotEmpty()) Text(it, fontSize = 13.sp, color = TextMuted); Spacer(Modifier.width(10.dp)) }
+                            movie.releaseDate.take(4).let {
+                                if (it.isNotEmpty()) {
+                                    RizzoText(style = RizzoTextStyle.LabelMd, text = it)
+                                    Spacer(Modifier.width(10.dp))
+                                }
+                            }
                             if (movie.rating > 0) {
-                                Text("★ %.1f".format(movie.rating), fontSize = 13.sp, color = BrandGold)
+                                RizzoText(
+                                    style = RizzoTextStyle.LabelMd,
+                                    text = "★ %.1f".format(movie.rating),
+                                    color = BrandGold,
+                                )
                                 Spacer(Modifier.width(10.dp))
                             }
-                            movie.runtime?.let { if (it > 0) Text("${it}m", fontSize = 13.sp, color = TextMuted) }
+                            movie.runtime?.let { if (it > 0) RizzoText(style = RizzoTextStyle.LabelMd, text = "${it}m") }
                         }
                         Spacer(Modifier.height(12.dp))
 
-                        // Action buttons row
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            val playInteraction = remember { MutableInteractionSource() }
-                            val playFocused by playInteraction.collectIsFocusedAsState()
-                            val playScale by animateFloatAsState(
-                                targetValue = if (playFocused) 1.06f else 1f,
-                                animationSpec = spring(stiffness = Spring.StiffnessHigh, dampingRatio = Spring.DampingRatioNoBouncy),
-                                label = "playScale"
+                        // Action buttons
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RizzoButton(
+                                text = "Play",
+                                onClick = onPlay,
+                                modifier = Modifier.focusRequester(playFocus),
                             )
-                            Text(
-                                "▶ Play",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (playFocused) MainBg else Color.White,
-                                modifier = Modifier
-                                    .scale(playScale)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .then(Modifier.border(if (playFocused) 3.dp else 0.dp, Color.White, RoundedCornerShape(8.dp)))
-                                    .background(if (playFocused) AccentBlue else AccentBlue.copy(alpha = 0.85f))
-                                    .focusRequester(playFocus)
-                                    .focusable()
-                                    .clickable(onClick = onPlay)
-                                    .padding(horizontal = 20.dp, vertical = 10.dp)
-                            )
-                            val favInteractionSource = remember { MutableInteractionSource() }
-                            val favFocused by favInteractionSource.collectIsFocusedAsState()
-                            Text(
-                                if (isFavorite) "♥" else "♡",
-                                fontSize = 16.sp,
-                                color = if (favFocused) AccentBlue else if (isFavorite) RedColor else TextMuted,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (favFocused) AccentBlue.copy(alpha = 0.15f) else Color.Transparent)
-                                    .then(if (favFocused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.5f), RoundedCornerShape(8.dp)) else Modifier)
-                                    .focusable(interactionSource = favInteractionSource)
-                                    .clickable(onClick = onToggleFavorite)
-                                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                            RizzoIconButton(
+                                icon = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                onClick = onToggleFavorite,
+                                contentDesc = if (isFavorite) "Remove from favorites" else "Add to favorites",
                             )
                         }
                     }
@@ -194,20 +179,18 @@ fun TmdbMovieDetailView(
             item {
                 Spacer(Modifier.height(24.dp))
                 if (movie.overview.isNotEmpty()) {
-                    Text(
-                        "Overview",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary,
+                    RizzoText(
+                        style = RizzoTextStyle.LabelLg,
+                        text = "Overview",
                         modifier = Modifier.padding(horizontal = 24.dp)
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        movie.overview,
-                        fontSize = 13.sp,
-                        color = TextMuted,
+                    Spacer(Modifier.height(6.dp))
+                    RizzoText(
+                        style = RizzoTextStyle.BodySm,
+                        text = movie.overview,
+                        color = RizzoTextSecondary,
                         modifier = Modifier.padding(horizontal = 24.dp),
-                        lineHeight = 19.sp
+                        lineHeightOverride = 20,
                     )
                 }
                 Spacer(Modifier.height(24.dp))

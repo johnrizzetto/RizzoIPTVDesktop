@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzoplayer.iptv.data.model.TorrentioStream
 import com.rizzoplayer.iptv.data.model.UnifiedTorrent
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusGroup
 import com.rizzoplayer.iptv.ui.theme.*
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -455,7 +456,7 @@ fun PremiumStreamSelectionOverlay(
             // ── Stream list ──────────────────────────────────────────────────
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().rizzoFocusGroup(),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {

@@ -52,6 +52,8 @@ import com.rizzoplayer.iptv.data.model.Favorite
 import com.rizzoplayer.iptv.data.model.RecentItem
 import com.rizzoplayer.iptv.data.model.TmdbMovie
 import com.rizzoplayer.iptv.ui.theme.*
+import com.rizzoplayer.iptv.ui.designsystem.RizzoSkeletonRow
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusGroup
 import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
@@ -284,6 +286,7 @@ fun TmdbMovieGrid(
             columns = GridCells.Adaptive(120.dp),
             modifier = Modifier
                 .fillMaxSize()
+                .rizzoFocusGroup()
                 .gridTopRowFocus(firstFocus),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -511,30 +514,18 @@ private fun ShimmerPosterCard(modifier: Modifier = Modifier) {
 
 @Composable
 fun ShimmerMovieGrid(modifier: Modifier = Modifier) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(120.dp),
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(20, contentType = { "shimmer" }) {
-            ShimmerPosterCard()
-        }
-    }
+    RizzoSkeletonRow(
+        count = 8,
+        posterRatio = 0.667f,
+        modifier = modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
 fun ShimmerShowGrid(modifier: Modifier = Modifier) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(120.dp),
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(20, contentType = { "shimmer" }) {
-            ShimmerPosterCard()
-        }
-    }
+    RizzoSkeletonRow(
+        count = 8,
+        posterRatio = 0.667f,
+        modifier = modifier.fillMaxWidth(),
+    )
 }

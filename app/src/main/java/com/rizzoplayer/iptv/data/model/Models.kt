@@ -16,6 +16,7 @@ data class Credentials(
     fun isValid() = url.isNotBlank() && username.isNotBlank() && password.isNotBlank()
 }
 
+@Immutable
 @Serializable
 data class ServerConfig(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -71,6 +72,7 @@ data class Series(
     @SerialName("cover") val cover: String? = null
 )
 
+@Immutable
 @Serializable
 data class SeriesInfo(
     @SerialName("episodes") val episodes: Map<String, List<Episode>>? = null
@@ -85,17 +87,20 @@ data class Episode(
     @SerialName("episode_num") val episodeNum: Int = 0
 )
 
+@Immutable
 @Serializable
 data class VodInfo(
     @SerialName("movie_data") val movieData: MovieData? = null
 )
 
+@Immutable
 @Serializable
 data class MovieData(
     @SerialName("stream_id") val streamId: Int = 0,
     @SerialName("container_extension") val containerExtension: String = "mp4"
 )
 
+@Immutable
 @Serializable
 data class EpgResponse(
     @SerialName("epg_listings") val listings: List<EpgListing>? = null
@@ -133,6 +138,7 @@ data class RecentItem(
     val durationMs: Long = 0
 )
 
+@Immutable
 @Serializable
 data class PlayEvent(
     val url: String,

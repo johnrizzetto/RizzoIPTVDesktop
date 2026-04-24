@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ktlint)
 }
 
 val localProps = Properties().apply {
@@ -42,6 +43,12 @@ android {
             applicationIdSuffix = ".v3"
             versionName = "3.0.0"
             versionCode = 3
+        }
+        create("v4") {
+            dimension = "version"
+            applicationIdSuffix = ".v4"
+            versionName = "4.0.0-alpha.1"
+            versionCode = 4
         }
     }
 

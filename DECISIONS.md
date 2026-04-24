@@ -1,65 +1,110 @@
-# Decisions
+# RizzoIPTVPlayer v4 — Decisions Log
 
-Key architectural decisions made during the Minimax Performance Release.
+**Branch:** `v4-polish` | **Started:** 2026-04-23
 
-## T1 - Shared OkHttpClient
+---
 
-### Decision: One shared OkHttpClient per API variant
+## ADR-001: v4 Fork Strategy
 
-**Context**: Multiple services (`IPTVApiService`, `TmdbApiService`, `TorBoxApiService`, `TraktService`, `OpenSubtitlesService`) each created their own `OkHttpClient`, resulting in separate connection pools, thread pools, and caches per service.
+**Date:** 2026-04-23
 
-**Decision**: NetworkClient produces three clients: `base`, `iptx`, `opensubtitles`. Each variant shares the same cache directory and connection pool (16 connections, 2 min TTL). The base client is also used by TraktService directly.
+**Decision:** Fork from `claude/romantic-leakey-57e175-work` (current v3 HEAD) into `v4-polish` branch. Tag `v4-genesis` at fork point.
 
-**Rationale**: HTTP/2 connection reuse across all services reduces DNS/handsake overhead. A single 100MB cache reduces memory pressure vs. N separate caches. Connection prewarm amortizes the handshake cost.
+**Rationale:** v3 is actively developed; v4 polish work must not disrupt v3 shipping. Separate branch + tag provides safety net. No force-push to `v4-genesis`.
 
-### Decision: Cache directory per process, not per client
+---
 
-**Context**: `OkHttpClient` requires a single `Cache` instance per client.
+## ADR-002: Compose BOM Version
 
-**Decision**: All three client variants point to the same `cacheDir/okhttp_shared_cache` directory. `NetworkClient` manages the single `Cache` instance at object level with `@Volatile` lazy initialization.
+**Date:** 2026-04-23
 
-**Trade-off**: Services with different API keys (e.g., `opensubtitles`) technically share cache entries. This is acceptable for read-only subtitle/download responses which are naturally cacheable by URL.
+**Decision:** Keep BOM `2024.05.00`. Do not bump unless an agent has a concrete compatibility reason.
 
-### Decision: No Robolectric — hand-rolled `StubContext`
+**Rationale:** Stability over novelty. v3 works with this BOM; v4 inherits the same stack.
 
-**Context**: No Robolectric dependency in the project.
+---
 
-**Decision**: `OpenSubtitlesServiceTest` implements a minimal `StubContext` abstract class providing only the methods actually called by `NetworkClient.init()` and the service constructors. The `tempDir` is a file-level property outside the class to avoid reference issues in inner class.
+## ADR-003: DI Framework — No Introduction
 
-**Trade-off**: SDK version (34) must be kept in sync manually. When compileSdk changes, `javap` should be re-run on the new `android.jar` to identify any added/removed abstract methods.
+**Date:** 2026-04-23
 
-### Decision: `registerReceiver` uses nullable receiver throughout
+**Decision:** Do not introduce Hilt, Koin, or any DI framework.
 
-**Context**: The SDK 34 `Context.registerReceiver` signatures are all `BroadcastReceiver` (non-nullable), but the runtime API can be called with `null`.
+**Rationale:** Manual constructor injection is already in place. Introducing DI would require rewriting the entire app's object graph. Clean up what exists; don't replace it.
 
-**Decision**: `StubContext` uses `BroadcastReceiver?` (nullable) for all registerReceiver overloads to allow tests to mock receiver behavior cleanly. The Kotlin override accepts nullable even though the Java signature uses non-null.
+---
 
-**Trade-off**: This may cause a Kotlin "overrides nothing" warning or conflict if a future SDK adds an overload with a nullable receiver type.
+## ADR-004: Design System Brand Color
 
-## T8 - Baseline Profile + Macrobenchmark
+**Date:** 2026-04-23
 
-### Decision: Standalone benchmark module approach
+**Decision:** v4 brand accent color = `#7C3AED` (indigo). v2/v3 use `#2563EB` (blue). Distinct tint differentiates v4 from v3 on the home row.
 
-**Context**: Baseline profiles require a separate `androidTest` source set that generates profiles during the build. The app's main `build.gradle.kts` needed to reference these generated profiles.
+**Implementation:** `RizzoColors.kt` (Agent 1 owns). v4 adaptive icon foreground color = `#7C3AED`.
 
-**Decision**: Created a standalone `:baselineprofile` Gradle module following the standard Android baseline profile pattern. The module contains `BaselineProfileGenerator.kt` (profile generation journey) and `StartupBenchmark.kt` (startup timing measurement). The generated profile is emitted via `BaselineProfileRule.collect()` during instrumented tests.
+---
 
-**Rationale**: A separate module keeps the benchmark code isolated from the app codebase and follows Google's recommended pattern for baseline profile generation.
+## ADR-005: Shared Element Transitions
 
-### Decision: Using `BaselineProfileRule` vs `MacrobenchmarkRule`
+**Date:** 2026-04-23
 
-**Decision**: Used `BaselineProfileRule` (from `androidx.benchmark:benchmark-macro-junit4`) for profile generation, which uses `collect()` method with a simple lambda block rather than `measureRepeated()`. The `MacrobenchmarkRule` was used for `StartupBenchmark` with `measureRepeated()` for repeated startup timing measurements.
+**Decision:** Use crossfade + scale for poster → detail transitions. NOT SharedTransitionLayout.
 
-**Trade-off**: `BaselineProfileRule.collect()` is designed specifically for profile generation and handles the profile output automatically. `MacrobenchmarkRule.measureRepeated()` is more general-purpose for measuring any macrobenchmark metric.
+**Rationale:** Compose `SharedTransitionLayout` requires Compose 1.7+. Current BOM is `2024.05.00` (Compose 1.6.x). Document as a future upgrade path when BOM bumps to 1.7+.
 
-### Decision: Not consuming generated profile in app build
+---
 
-**Context**: The spec mentioned that `app/build.gradle.kts` should consume the generated profile to include it in the APK. However, `generateBaselineProfile` task output location varies by AGP version and requires additional configuration.
+## ADR-006: PreferencesStore Migration
 
-**Decision**: The baseline profile generation module is set up and runs correctly via Gradle tasks. The `StartupBenchmark` produces `timeToInitialDisplayMs` measurements when run on physical device. Committing the module structure so future runs can capture real device metrics.
+**Date:** 2026-04-23
 
-### Command to regenerate baseline profile:
-```bash
-./gradlew :baselineprofile:pixel6Api31NonMinifiedV2ReleaseAndroidTest
-```
-(Replace `pixel6Api31NonMinifiedV2ReleaseAndroidTest` with your actual device/test runner task name after connecting a device or emulator.)
+**Decision:** Migrate `PreferencesStore` from SharedPreferences to DataStore.
+
+**Rationale:** All other stores use DataStore. SharedPreferences is the only outlier, inconsistent and lacks coroutine-friendly API. Migration needed before v4 ships.
+
+---
+
+## ADR-007: MainViewModel Split
+
+**Date:** 2026-04-23
+
+**Decision:** Split MainViewModel (709 lines) into:
+- `MainViewModel` — thin coordinator, combined MainUiState
+- `PlaybackViewModel` — stream resolution, PlaybackPrep, PlaybackPositionStore
+- `EpgViewModel` — EPG loading and refresh
+
+**Rationale:** 4 distinct responsibilities in one ViewModel violates single-responsibility. Hard to test, hard to modify. Agent 5 owns this.
+
+---
+
+## ADR-008: No XML Layouts
+
+**Date:** 2026-04-23
+
+**Decision:** Compose only. No new XML layouts.
+
+**Rationale:** App already uses Compose for all UI. No hybrid approach.
+
+---
+
+## ADR-009: Baseline Profile
+
+**Date:** 2026-04-23
+
+**Decision:** Generate a baseline profile for cold start → Home render. Add macrobenchmark module.
+
+**Rationale:** No baseline exists. v4 changes may affect startup; having a baseline proves no regression.
+
+---
+
+## ADR-010: v4 Package Isolation
+
+**Date:** 2026-04-23
+
+**Decision:** v4 package = `com.rizzoplayer.iptv.v4`. DataStore files are scoped by Android package automatically.
+
+**Rationale:** Android's DataStore uses the app's package as file scope. `.v4` suffix on applicationId means different file paths for each flavor. No manual DataStore name changes needed.
+
+---
+
+*Append new ADRs above this line. Format: ADR-NNN: Title*

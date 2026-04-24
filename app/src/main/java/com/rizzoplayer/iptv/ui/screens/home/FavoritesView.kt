@@ -34,6 +34,7 @@ import coil.request.ImageRequest
 import coil.size.Size
 import com.rizzoplayer.iptv.AppConfig
 import com.rizzoplayer.iptv.data.model.Favorite
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusGroup
 import com.rizzoplayer.iptv.ui.theme.*
 
 @Composable
@@ -57,7 +58,7 @@ fun FavoritesView(
 
     val firstFocus = remember { FocusRequester() }
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().rizzoFocusGroup(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
