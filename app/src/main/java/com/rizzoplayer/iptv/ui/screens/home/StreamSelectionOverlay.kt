@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzoplayer.iptv.data.model.TorrentioStream
+import com.rizzoplayer.iptv.data.model.UnifiedTorrent
 import com.rizzoplayer.iptv.ui.theme.*
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -83,6 +84,26 @@ object TorrentioParser {
         )
     }
 
+    fun parse(torrent: UnifiedTorrent): StreamMetadata {
+        // UnifiedTorrent has title, url (magnet), no separate name field — derive name from title
+        val combined = torrent.title
+        val resolution = detectResolution(combined)
+        val videoTech  = detectVideoTech(combined, resolution)
+        val audio      = detectAudio(combined)
+        val fileSize   = detectFileSize(combined)
+        val seeders    = if (torrent.seeders > 0) torrent.seeders else detectSeeders(combined)
+        val cleanName  = cleanFileName(torrent.title)
+
+        return StreamMetadata(
+            resolution = resolution,
+            videoTech  = videoTech,
+            audio      = audio,
+            fileSizeGb = fileSize,
+            seeders    = seeders,
+            cleanName  = cleanName,
+        )
+    }
+
     private fun detectResolution(text: String): ResolutionBadge? {
         val upper = text.uppercase()
         return when {
@@ -94,7 +115,7 @@ object TorrentioParser {
         }
     }
 
-    private fun detectVideoTech(text: String, res: ResolutionBadge?): VideoTechBadge? {
+    private fun detectVideoTech(text: String, @Suppress("UNUSED_PARAMETER") res: ResolutionBadge?): VideoTechBadge? {
         return when {
             RE_DV.containsMatchIn(text)             -> VideoTechBadge.TECH_DV
             RE_HDR10PLUS.containsMatchIn(text.uppercase()) -> VideoTechBadge.TECH_HDR10PLUS
@@ -153,7 +174,7 @@ object TorrentioParser {
 
 @Composable
 fun StreamItemCard(
-    stream: TorrentioStream,
+    stream: Any,  // UnifiedTorrent or TorrentioStream
     metadata: TorrentioParser.StreamMetadata,
     isFocused: Boolean,
     onSelect: () -> Unit,
@@ -203,7 +224,13 @@ fun StreamItemCard(
     ) {
         // ── Top: Clean filename ──────────────────────────────────────────────
         Text(
-            text = metadata.cleanName.ifEmpty { stream.title.take(60).replace('.', ' ') },
+            text = metadata.cleanName.ifEmpty {
+                val title = when (stream) {
+                    is UnifiedTorrent -> stream.title
+                    else -> (stream as TorrentioStream).title
+                }
+                title.take(60).replace('.', ' ')
+            },
             fontSize = 13.sp,
             fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Normal,
             color = textColor,
@@ -312,8 +339,8 @@ private fun formatSeeders(n: Int): String = when {
 @Composable
 fun PremiumStreamSelectionOverlay(
     title: String,
-    streams: List<TorrentioStream>,
-    onSelect: (TorrentioStream) -> Unit,
+    streams: List<UnifiedTorrent>,
+    onSelect: (UnifiedTorrent) -> Unit,
     onDismiss: () -> Unit,
 ) {
     // Debounce: guard against rapid D-pad mashing firing multiple onSelect calls

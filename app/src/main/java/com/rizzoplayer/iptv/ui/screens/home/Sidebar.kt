@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -17,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -26,12 +27,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavHostController
 import kotlinx.coroutines.launch
 import com.rizzoplayer.iptv.R
+import com.rizzoplayer.iptv.ui.navigation.FocusManager
 import com.rizzoplayer.iptv.ui.navigation.Screen
 import com.rizzoplayer.iptv.ui.theme.*
-import com.rizzoplayer.iptv.ui.viewmodel.Section
 
 private data class NavEntry(val icon: String, val label: String, val route: String)
 private val NAV_ENTRIES = listOf(
@@ -47,18 +47,16 @@ private val NAV_ENTRIES = listOf(
 fun Sidebar(
     widthDp: Dp,
     expanded: Boolean,
-    navController: NavHostController,
     currentRoute: String,
     canGoBack: Boolean,
     onFocusEnter: () -> Unit,
     onFocusExit: () -> Unit,
     onBack: () -> Unit,
     onLogout: () -> Unit,
-    contentFocusRestorer: FocusRequester,
     onSelectSection: (String) -> Unit,
+    initialSidebarFocus: FocusRequester,
 ) {
     var showLogoutDialog by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     if (showLogoutDialog) {
         AlertDialog(
@@ -79,8 +77,10 @@ fun Sidebar(
             .padding(vertical = 16.dp, horizontal = 4.dp),
         horizontalAlignment = if (expanded) Alignment.Start else Alignment.CenterHorizontally
     ) {
-        val signOutFocusRequester = remember { FocusRequester() }
-        val sidebarNavFocusRequesters = remember { List(NAV_ENTRIES.size) { FocusRequester() } }
+        // Phase 2: No manual upTarget/downTarget chain needed.
+        // Compose focus system traverses sibling focusable elements naturally.
+        // FocusManager tracks lastFocusedIndex for return navigation instead.
+
         Image(
             painter = painterResource(id = R.drawable.logo),
             contentDescription = null,
@@ -94,29 +94,19 @@ fun Sidebar(
         Spacer(Modifier.height(16.dp))
 
         NAV_ENTRIES.forEachIndexed { idx, entry ->
-            val upTarget = if (idx == 0) signOutFocusRequester else sidebarNavFocusRequesters[idx - 1]
-            val downTarget = if (idx == NAV_ENTRIES.lastIndex) signOutFocusRequester else sidebarNavFocusRequesters[idx + 1]
             SidebarNavItem(
                 icon = entry.icon,
                 label = entry.label,
                 active = currentRoute == entry.route,
                 expanded = expanded,
-                fr = sidebarNavFocusRequesters[idx],
-                upTarget = upTarget,
-                downTarget = downTarget,
+                // First nav item gets the initialSidebarFocus requester for first-launch
+                fr = if (idx == 0) initialSidebarFocus else remember { FocusRequester() },
                 onClick = {
+                    // Track last focused index for return navigation
+                    FocusManager.setSidebarFocusedIndex(idx)
                     onSelectSection(entry.route)
-                    scope.launch {
-                        // One frame is usually enough for the NavHost to mount the destination.
-                        // A single short fallback covers slow devices without the 2-second old loop.
-                        kotlinx.coroutines.delay(32)
-                        try {
-                            contentFocusRestorer.requestFocus()
-                        } catch (_: Exception) {
-                            kotlinx.coroutines.delay(100)
-                            try { contentFocusRestorer.requestFocus() } catch (_: Exception) {}
-                        }
-                    }
+                    // Signal content to restore focus (Phase 1 FocusManager pattern)
+                    FocusManager.requestContentFocus()
                 },
             )
             Spacer(Modifier.height(2.dp))
@@ -131,15 +121,7 @@ fun Sidebar(
                 expanded = expanded,
                 onClick = {
                     onBack()
-                    scope.launch {
-                        kotlinx.coroutines.delay(32)
-                        try {
-                            contentFocusRestorer.requestFocus()
-                        } catch (_: Exception) {
-                            kotlinx.coroutines.delay(100)
-                            try { contentFocusRestorer.requestFocus() } catch (_: Exception) {}
-                        }
-                    }
+                    FocusManager.requestContentFocus()
                 },
             )
         }
@@ -153,9 +135,6 @@ fun Sidebar(
             active = false,
             expanded = expanded,
             danger = true,
-            fr = signOutFocusRequester,
-            upTarget = sidebarNavFocusRequesters.last(),
-            downTarget = sidebarNavFocusRequesters.first(),
             onClick = { showLogoutDialog = true },
         )
     }
@@ -170,12 +149,11 @@ private fun SidebarNavItem(
     onClick: () -> Unit,
     fr: FocusRequester = remember { FocusRequester() },
     danger: Boolean = false,
-    upTarget: FocusRequester? = null,
-    downTarget: FocusRequester? = null,
 ) {
-    var focused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (focused) 1.04f else 1f,
+        targetValue = if (isFocused) 1.04f else 1f,
         animationSpec = spring(
             stiffness = Spring.StiffnessMediumLow,
             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -183,20 +161,20 @@ private fun SidebarNavItem(
         label = "navScale",
     )
     val bg = when {
-        danger && focused -> Color(0xFF2A0A0A)
-        focused -> NavFocusBg
+        danger && isFocused -> Color(0xFF2A0A0A)
+        isFocused -> NavFocusBg
         active -> NavActive
         else -> Color.Transparent
     }
     val iconColor = when {
-        danger && focused -> RedColor
+        danger && isFocused -> RedColor
         danger -> TextMuted.copy(alpha = 0.5f)
-        active || focused -> AccentBlue
+        active || isFocused -> AccentBlue
         else -> TextMuted
     }
     val textColor = when {
-        danger && focused -> RedColor
-        active || focused -> TextPrimary
+        danger && isFocused -> RedColor
+        active || isFocused -> TextPrimary
         else -> TextMuted
     }
 
@@ -207,7 +185,7 @@ private fun SidebarNavItem(
             .clip(RoundedCornerShape(6.dp))
             .background(bg)
             .then(
-                if (focused) Modifier.border(
+                if (isFocused) Modifier.border(
                     2.dp,
                     if (danger) RedColor.copy(alpha = 0.45f)
                     else AccentBlue,
@@ -215,17 +193,16 @@ private fun SidebarNavItem(
                 )
                 else Modifier
             )
-            .onFocusChanged { focused = it.isFocused }
-            .then(
-                if (upTarget != null || downTarget != null) {
-                    Modifier.focusProperties {
-                        if (upTarget != null) up = upTarget
-                        if (downTarget != null) down = downTarget
-                    }
-                } else Modifier
-            )
+            .onFocusChanged {
+                // Track sidebar index for return navigation (Phase 2 FocusManager pattern)
+                if (it.isFocused) {
+                    FocusManager.setSidebarFocusedIndex(
+                        NAV_ENTRIES.indexOfFirst { e -> e.label == label }.takeIf { i -> i >= 0 } ?: 0
+                    )
+                }
+            }
             .focusRequester(fr)
-            .focusable()
+            .focusable(interactionSource = interactionSource)
             .clickable(onClick = onClick)
             .padding(horizontal = if (expanded) 10.dp else 0.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically

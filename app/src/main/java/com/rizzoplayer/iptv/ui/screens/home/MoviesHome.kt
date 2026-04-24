@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,6 +20,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.FlowPreview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +53,8 @@ import com.rizzoplayer.iptv.data.model.TmdbMovie
 import com.rizzoplayer.iptv.ui.theme.*
 import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 
 @Composable
 fun MoviesHome(
@@ -57,7 +64,9 @@ fun MoviesHome(
     onSelectMovie: (TmdbMovie) -> Unit,
     onToggleFavorite: (TmdbMovie) -> Unit,
     onPlayRecent: ((RecentItem) -> Unit)? = null,
-    onFocusPrefetch: ((Int) -> Unit)? = null
+    initialScrollIndex: Int = -1,
+    onScrollRestored: () -> Unit = {},
+    onScrollPositionChange: (Int) -> Unit = {}
 ) {
     val hero = content.items.firstOrNull()
     val heroBackdrop = hero?.backdropPath?.let {
@@ -76,7 +85,7 @@ fun MoviesHome(
             )
         }
         // Hero backdrop
-        if (heroBackdrop != null && hero != null) {
+        if (heroBackdrop != null) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -195,23 +204,35 @@ fun MoviesHome(
                 favorites = favorites,
                 onSelectMovie = onSelectMovie,
                 onToggleFavorite = onToggleFavorite,
-                onFocusPrefetch = onFocusPrefetch
+                initialScrollIndex = initialScrollIndex,
+                onScrollRestored = onScrollRestored,
+                onScrollPositionChange = onScrollPositionChange
             )
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, FlowPreview::class)
 @Composable
 fun TmdbMovieGrid(
     content: BrowseContent.TmdbMovies,
     favorites: Map<String, Favorite>,
     onSelectMovie: (TmdbMovie) -> Unit,
     onToggleFavorite: (TmdbMovie) -> Unit,
-    onFocusPrefetch: ((Int) -> Unit)? = null
+    initialScrollIndex: Int = -1,
+    onScrollRestored: () -> Unit = {},
+    onScrollPositionChange: (Int) -> Unit = {}
 ) {
     val firstFocus = remember { FocusRequester() }
     val listState = rememberLazyGridState()
+
+    // Restore scroll position when returning via back navigation
+    LaunchedEffect(initialScrollIndex) {
+        if (initialScrollIndex >= 0 && listState.firstVisibleItemIndex == 0) {
+            listState.scrollToItem(initialScrollIndex)
+            onScrollRestored()
+        }
+    }
     val context = LocalContext.current
     val imageLoader = remember { Coil.imageLoader(context) }
 
@@ -237,30 +258,36 @@ fun TmdbMovieGrid(
         }
     }
 
+    // Report scroll position to caller for back-navigation restoration
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .debounce(300L)
+            .collect { idx -> onScrollPositionChange(idx) }
+    }
+
     LazyVerticalGrid(
         state = listState,
         columns = GridCells.Adaptive(120.dp),
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .gridTopRowFocus(firstFocus),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(content.items, key = { it.id }, contentType = { "TmdbMovie" }) { movie ->
             val isFirst = content.items.firstOrNull()?.id == movie.id
-            var focused by remember { mutableStateOf(false) }
             TmdbPosterCard(
                 title = movie.title,
                 posterPath = movie.posterPath,
                 rating = movie.rating,
                 year = movie.releaseDate.take(4),
                 overview = movie.overview,
-                isFocused = focused,
                 isFavorite = favorites.containsKey(movie.id.toString()),
-                onFocusChanged = { focused = it },
                 onClick = { onSelectMovie(movie) },
                 onLongClick = { onToggleFavorite(movie) },
-                onFocusPrefetch = onFocusPrefetch,
-                prefetchId = movie.id,
+
                 modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier
             )
         }
@@ -275,20 +302,20 @@ fun TmdbPosterCard(
     rating: Float,
     year: String,
     overview: String,
-    isFocused: Boolean,
     isFavorite: Boolean,
-    onFocusChanged: (Boolean) -> Unit,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     cardWidth: androidx.compose.ui.unit.Dp = 120.dp,
     posterHeight: androidx.compose.ui.unit.Dp = 180.dp,
-    onFocusPrefetch: ((Int) -> Unit)? = null,
-    prefetchId: Int? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isCardFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(if (isCardFocused) 1.05f else 1f, label = "cardScale")
+    val scale by animateFloatAsState(
+        targetValue = if (isCardFocused) 1.05f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "cardScale"
+    )
 
     Box(modifier = modifier.fillMaxWidth()) {
         Card(
@@ -297,13 +324,7 @@ fun TmdbPosterCard(
                 .align(Alignment.TopCenter)
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .focusable(interactionSource = interactionSource)
-                .clickable(onClick = onClick)
-                .onFocusChanged {
-                onFocusChanged(it.isFocused)
-                if (it.isFocused && prefetchId != null && onFocusPrefetch != null) {
-                    onFocusPrefetch.invoke(prefetchId)
-                }
-            }
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
                 .then(
                     if (isCardFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(8.dp))
                     else Modifier

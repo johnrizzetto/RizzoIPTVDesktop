@@ -172,7 +172,8 @@ fun TmdbMovieDetailView(
                                     .clickable(onClick = onPlay)
                                     .padding(horizontal = 20.dp, vertical = 10.dp)
                             )
-                            var favFocused by remember { mutableStateOf(false) }
+                            val favInteractionSource = remember { MutableInteractionSource() }
+                            val favFocused by favInteractionSource.collectIsFocusedAsState()
                             Text(
                                 if (isFavorite) "♥" else "♡",
                                 fontSize = 16.sp,
@@ -181,8 +182,7 @@ fun TmdbMovieDetailView(
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(if (favFocused) AccentBlue.copy(alpha = 0.15f) else Color.Transparent)
                                     .then(if (favFocused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.5f), RoundedCornerShape(8.dp)) else Modifier)
-                                    .onFocusChanged { favFocused = it.isFocused }
-                                    .focusable()
+                                    .focusable(interactionSource = favInteractionSource)
                                     .clickable(onClick = onToggleFavorite)
                                     .padding(horizontal = 14.dp, vertical = 10.dp)
                             )

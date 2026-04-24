@@ -29,12 +29,19 @@ android {
     }
 
     // v2 variant: same codebase, separate package so it coexists with v1 on the same device
+    // v3 variant: same codebase, separate package for v3 preview/testing
     productFlavors {
         create("v2") {
             dimension = "version"
             applicationIdSuffix = ".v2"
             versionName = "2.0.0"
             versionCode = 2
+        }
+        create("v3") {
+            dimension = "version"
+            applicationIdSuffix = ".v3"
+            versionName = "3.0.0"
+            versionCode = 3
         }
     }
 

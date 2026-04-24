@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -83,7 +85,9 @@ private fun FavoriteRow(
     onMoveDown: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var focused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    // showMenu is a MENU VISIBILITY toggle — not focus-related, must stay as mutableStateOf
     var showMenu by remember { mutableStateOf(false) }
 
     if (showMenu) {
@@ -98,7 +102,8 @@ private fun FavoriteRow(
             listOf("↑ Move Up" to onMoveUp, "↓ Move Down" to onMoveDown, "✕ Remove" to {
                 showMenu = false; onRemove()
             }).forEach { (label, action) ->
-                var mFocused by remember { mutableStateOf(false) }
+                val mInteractionSource = remember { MutableInteractionSource() }
+                val mFocused by mInteractionSource.collectIsFocusedAsState()
                 Text(
                     label,
                     fontSize = 12.sp,
@@ -106,8 +111,7 @@ private fun FavoriteRow(
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
                         .background(if (mFocused) AccentBlue.copy(alpha = 0.15f) else Color.Transparent)
-                        .onFocusChanged { mFocused = it.isFocused }
-                        .focusable()
+                        .focusable(interactionSource = mInteractionSource)
                         .clickable { action() }
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 )
@@ -120,10 +124,9 @@ private fun FavoriteRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
-            .background(if (focused) CardFocused else CardBg)
-            .then(if (focused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
+            .background(if (isFocused) CardFocused else CardBg)
+            .then(if (isFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
+            .focusable(interactionSource = interactionSource)
             .clickable(onClick = onPlay)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -164,7 +167,7 @@ private fun FavoriteRow(
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(fav.name, fontSize = 13.sp, color = if (focused) TextPrimary else TextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(fav.name, fontSize = 13.sp, color = if (isFocused) TextPrimary else TextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
             Text(
                 when (fav.type) {
@@ -185,7 +188,7 @@ private fun FavoriteRow(
         Text(
             "⋮",
             fontSize = 16.sp,
-            color = if (focused) AccentBlue else TextMuted,
+            color = if (isFocused) AccentBlue else TextMuted,
             modifier = Modifier
                 .clip(RoundedCornerShape(4.dp))
                 .clickable { showMenu = true }

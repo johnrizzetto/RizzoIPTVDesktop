@@ -41,6 +41,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.rizzoplayer.iptv.R
 import com.rizzoplayer.iptv.data.model.*
+import com.rizzoplayer.iptv.ui.navigation.FocusManager
 import com.rizzoplayer.iptv.ui.navigation.Screen
 import com.rizzoplayer.iptv.ui.screens.home.*
 import com.rizzoplayer.iptv.ui.theme.*
@@ -72,11 +73,7 @@ fun HomeScreen(viewModel: MainViewModel) {
                 return@BackHandler
             }
             else -> {
-                // At top-level, navigate back to Live
-                navController.navigate(Screen.Live.route) {
-                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                    launchSingleTop = true
-                }
+                // At top-level with nowhere to go back to — absorb the back press silently
             }
         }
     }
@@ -90,12 +87,24 @@ fun HomeScreen(viewModel: MainViewModel) {
 
     // Focus requester for the NavHost content area — sidebar pushes focus here on nav
     val contentFocusRestorer = remember { FocusRequester() }
-    // Incremented each time content should steal focus from sidebar (or on initial entry).
-    // LaunchedEffect keys on this int so each sidebar tap re-fires the focus request.
-    var focusContentTick by remember { mutableStateOf(0) }
-    // Legacy alias kept so content composables don't need a rename pass — they treat any
-    // nonzero value as "please focus your first item."
-    val shouldFocusFirstItem = focusContentTick > 0
+    // Phase 3: Replace tick system (focusContentTick) with FocusManager boolean flag.
+    // The tick system had a race: onFocusChanged in outer Box fired on every child focus
+    // event, making focus unpredictable. FocusManager fires exactly once per sidebar click.
+    LaunchedEffect(Unit) {
+        FocusManager.shouldRestoreContentFocus.collect { should ->
+            if (should) {
+                withFrameNanos { } // one frame for NavHost to mount destination
+                try { contentFocusRestorer.requestFocus() } catch (_: Exception) {}
+                FocusManager.clearContentFocusRequest()
+            }
+        }
+    }
+
+    // Sidebar initial focus on first launch — zero delay, one frame
+    val sidebarInitialFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        sidebarInitialFocus.requestFocus()
+    }
 
     // Navigate + update ViewModel state in one call
     val navigateAndSelectSection: (String) -> Unit = { route ->
@@ -118,7 +127,6 @@ fun HomeScreen(viewModel: MainViewModel) {
     Row(Modifier.fillMaxSize().background(MainBg)) {
 
         Sidebar(
-            navController = navController,
             widthDp = sidebarWidth,
             expanded = sidebarExpanded,
             currentRoute = currentRoute,
@@ -128,7 +136,7 @@ fun HomeScreen(viewModel: MainViewModel) {
             onFocusExit = { sidebarExpanded = false },
             onBack = viewModel::goBack,
             onLogout = viewModel::logout,
-            contentFocusRestorer = contentFocusRestorer,
+            initialSidebarFocus = sidebarInitialFocus,
         )
 
         // ── NavHost column ──────────────────────────────────────────────────
@@ -169,13 +177,13 @@ fun HomeScreen(viewModel: MainViewModel) {
             }
 
             // NavHost content — focusGroup routes requestFocus() to nearest child instead
-            // of absorbing it directly. onFocusChanged(hasFocus) fires for child focus too.
+            // of absorbing it directly.
             Box(
                 modifier = Modifier
                     .weight(1f)
+                    .fillMaxHeight()
                     .focusRequester(contentFocusRestorer)
                     .focusGroup()
-                    .onFocusChanged { if (it.hasFocus) focusContentTick++ }
             ) {
                 NavHost(
                     navController = navController,
@@ -184,15 +192,15 @@ fun HomeScreen(viewModel: MainViewModel) {
                 ) {
                     composable(Screen.Live.route) {
                         LaunchedEffect(Unit) { viewModel.selectSection(Section.LIVE) }
-                        LiveContent(viewModel, state, favorites, favoritesList, shouldFocusFirstItem)
+                        LiveContent(viewModel, state, favorites, favoritesList)
                     }
                     composable(Screen.Movies.route) {
                         LaunchedEffect(Unit) { viewModel.selectSection(Section.VOD) }
-                        MoviesContent(viewModel, state, favorites, favoritesList, continueWatching, shouldFocusFirstItem)
+                        MoviesContent(viewModel, state, favorites, favoritesList, continueWatching)
                     }
                     composable(Screen.Shows.route) {
                         LaunchedEffect(Unit) { viewModel.selectSection(Section.SERIES) }
-                        ShowsContent(viewModel, state, favorites, favoritesList, continueWatching, shouldFocusFirstItem)
+                        ShowsContent(viewModel, state, favorites, favoritesList, continueWatching)
                     }
                     composable(Screen.Favorites.route) {
                         LaunchedEffect(Unit) { viewModel.selectSection(Section.FAVORITES) }
@@ -242,7 +250,7 @@ fun HomeScreen(viewModel: MainViewModel) {
             PremiumStreamSelectionOverlay(
                 title = selection.title,
                 streams = selection.streams,
-                onSelect = viewModel::playSelectedStream,
+                onSelect = viewModel::playSelectedUnifiedStream,
                 onDismiss = viewModel::dismissStreamSelection,
             )
         }
@@ -274,8 +282,7 @@ private fun LiveContent(
     viewModel: MainViewModel,
     state: com.rizzoplayer.iptv.ui.viewmodel.MainUiState,
     favorites: Map<String, Favorite>,
-    favoritesList: List<Favorite>,
-    shouldFocusFirstItem: Boolean = false
+    favoritesList: List<Favorite>
 ) {
     val q = state.searchQuery.trim().lowercase()
 
@@ -296,8 +303,7 @@ private fun LiveContent(
                     items = filtered,
                     onSelect = { viewModel.selectCategory(it, Section.LIVE, 0) },
                     onPlay = viewModel::onPlayLive,
-                    onFavToggle = { s -> viewModel.toggleFavorite(s.id.toString(), s.name, "live", icon = s.icon) },
-                    shouldFocusFirstItem = shouldFocusFirstItem
+                    onFavToggle = { s -> viewModel.toggleFavorite(s.id.toString(), s.name, "live", icon = s.icon) }
                 )
             }
             is BrowseContent.LiveStreams -> {
@@ -309,8 +315,7 @@ private fun LiveContent(
                     items = filtered,
                     favorites = favorites,
                     onPlay = viewModel::onPlayLive,
-                    onFavToggle = { s -> viewModel.toggleFavorite(s.id.toString(), s.name, "live", icon = s.icon) },
-                    shouldFocusFirstItem = shouldFocusFirstItem
+                    onFavToggle = { s -> viewModel.toggleFavorite(s.id.toString(), s.name, "live", icon = s.icon) }
                 )
             }
             else -> EmptyHint("Select a category")
@@ -324,8 +329,7 @@ private fun MoviesContent(
     state: com.rizzoplayer.iptv.ui.viewmodel.MainUiState,
     favorites: Map<String, Favorite>,
     favoritesList: List<Favorite>,
-    continueWatching: List<RecentItem>,
-    shouldFocusFirstItem: Boolean = false
+    continueWatching: List<RecentItem>
 ) {
     val q = state.searchQuery.trim().lowercase()
 
@@ -336,6 +340,24 @@ private fun MoviesContent(
             onDismiss = viewModel::retryCurrent,
             onReload = viewModel::retryReload
         )
+        q.isNotEmpty() -> {
+            // If searchQuery is set but content hasn't loaded yet, show loading.
+            // Once content is TmdbSearchResults, show results; otherwise keep polling via LoadingView.
+            if (state.content is BrowseContent.TmdbSearchResults) {
+                val searchContent = state.content as BrowseContent.TmdbSearchResults
+                if (searchContent.movies.isNotEmpty()) {
+                    TmdbSearchResultsContent(
+                        content = searchContent,
+                        favorites = favorites,
+                        viewModel = viewModel
+                    )
+                } else {
+                    EmptyHint("No movies found")
+                }
+            } else {
+                LoadingView()
+            }
+        }
         else -> when (val content = state.content) {
             is BrowseContent.Categories -> {
                 val filtered = remember(content, q) {
@@ -344,8 +366,7 @@ private fun MoviesContent(
                 }
                 TmdbCategoriesContent(
                     items = filtered,
-                    onSelect = { viewModel.selectCategory(it, Section.VOD, 0) },
-                    shouldFocusFirstItem = shouldFocusFirstItem
+                    onSelect = { viewModel.selectCategory(it, Section.VOD, 0) }
                 )
             }
             is BrowseContent.TmdbMovies -> {
@@ -363,7 +384,9 @@ private fun MoviesContent(
                         )
                     },
                     onPlayRecent = viewModel::onPlayRecent,
-                    onFocusPrefetch = viewModel::prefetchMovie
+                    initialScrollIndex = state.restoreGridScrollIndex,
+                    onScrollRestored = viewModel::clearGridScrollRestore,
+                    onScrollPositionChange = { viewModel.updateGridScroll(it) }
                 )
             }
             is BrowseContent.TmdbMovieDetail -> {
@@ -393,8 +416,7 @@ private fun ShowsContent(
     state: com.rizzoplayer.iptv.ui.viewmodel.MainUiState,
     favorites: Map<String, Favorite>,
     favoritesList: List<Favorite>,
-    continueWatching: List<RecentItem>,
-    shouldFocusFirstItem: Boolean = false
+    continueWatching: List<RecentItem>
 ) {
     val q = state.searchQuery.trim().lowercase()
 
@@ -405,6 +427,22 @@ private fun ShowsContent(
             onDismiss = viewModel::retryCurrent,
             onReload = viewModel::retryReload
         )
+        q.isNotEmpty() -> {
+            if (state.content is BrowseContent.TmdbSearchResults) {
+                val searchContent = state.content as BrowseContent.TmdbSearchResults
+                if (searchContent.shows.isNotEmpty()) {
+                    TmdbSearchResultsContent(
+                        content = searchContent,
+                        favorites = favorites,
+                        viewModel = viewModel
+                    )
+                } else {
+                    EmptyHint("No shows found")
+                }
+            } else {
+                LoadingView()
+            }
+        }
         else -> when (val content = state.content) {
             is BrowseContent.Categories -> {
                 val filtered = remember(content, q) {
@@ -413,8 +451,7 @@ private fun ShowsContent(
                 }
                 TmdbCategoriesContent(
                     items = filtered,
-                    onSelect = { viewModel.selectCategory(it, Section.SERIES, 0) },
-                    shouldFocusFirstItem = shouldFocusFirstItem
+                    onSelect = { viewModel.selectCategory(it, Section.SERIES, 0) }
                 )
             }
             is BrowseContent.TmdbShows -> {
@@ -432,7 +469,9 @@ private fun ShowsContent(
                         )
                     },
                     onPlayRecent = viewModel::onPlayRecent,
-                    onFocusPrefetch = viewModel::prefetchShow
+                    initialScrollIndex = state.restoreGridScrollIndex,
+                    onScrollRestored = viewModel::clearGridScrollRestore,
+                    onScrollPositionChange = { viewModel.updateGridScroll(it) }
                 )
             }
             is BrowseContent.TmdbShowDetail -> {
@@ -477,21 +516,18 @@ private fun FavoritesContent(
 @Composable
 private fun TmdbCategoriesContent(
     items: List<Category>,
-    onSelect: (Category) -> Unit,
-    shouldFocusFirstItem: Boolean = false
+    onSelect: (Category) -> Unit
 ) {
     val listState = rememberLazyListState()
     val firstItemFocusRequester = remember { FocusRequester() }
     // First *selectable* item — skip non-focusable header rows (id starts with "H:")
     val firstSelectableId = remember(items) { items.firstOrNull { !it.id.startsWith("H:") }?.id }
 
-    // Single effect keyed on shouldFocusFirstItem (an incrementing tick) so each sidebar
-    // navigation re-triggers focus. One frame wait is enough for layout to be attached.
-    LaunchedEffect(shouldFocusFirstItem) {
-        if (firstSelectableId != null) {
-            withFrameNanos { } // wait for the current frame to finish layout
-            try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
-        }
+    // Single effect: focus first item when content first mounts (nav sidebar click).
+    // No tick/toggle needed — each NavHost destination gets its own fresh composable instance.
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
     }
     LazyColumn(
         state = listState,
@@ -523,22 +559,14 @@ private fun LiveCategoriesContent(
     items: List<Category>,
     onSelect: (Category) -> Unit,
     onPlay: (LiveStream) -> Unit,
-    onFavToggle: (LiveStream) -> Unit,
-    shouldFocusFirstItem: Boolean = false
+    onFavToggle: (LiveStream) -> Unit
 ) {
     val listState = rememberLazyListState()
     val firstItemFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(items) {
-        kotlinx.coroutines.delay(200)
+    // Single effect: focus first item when content first mounts.
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
         try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
-        kotlinx.coroutines.delay(50)
-        try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
-    }
-    LaunchedEffect(shouldFocusFirstItem) {
-        if (shouldFocusFirstItem) {
-            kotlinx.coroutines.delay(50)
-            try { firstItemFocusRequester.requestFocus() } catch (_: Exception) {}
-        }
     }
     LazyColumn(
         state = listState,
@@ -562,22 +590,14 @@ private fun LiveStreamsContent(
     items: List<LiveStream>,
     favorites: Map<String, Favorite>,
     onPlay: (LiveStream) -> Unit,
-    onFavToggle: (LiveStream) -> Unit,
-    shouldFocusFirstItem: Boolean = false
+    onFavToggle: (LiveStream) -> Unit
 ) {
     val listState = rememberLazyListState()
     val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(items) {
-        kotlinx.coroutines.delay(200)
+    // Single effect: focus first item when content first mounts.
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
         try { firstFocus.requestFocus() } catch (_: Exception) {}
-        kotlinx.coroutines.delay(50)
-        try { firstFocus.requestFocus() } catch (_: Exception) {}
-    }
-    LaunchedEffect(shouldFocusFirstItem) {
-        if (shouldFocusFirstItem) {
-            kotlinx.coroutines.delay(50)
-            try { firstFocus.requestFocus() } catch (_: Exception) {}
-        }
     }
     LazyColumn(
         state = listState,

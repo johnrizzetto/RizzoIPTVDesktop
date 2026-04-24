@@ -1,10 +1,13 @@
 package com.rizzoplayer.iptv.ui.screens.home
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -17,6 +20,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.FlowPreview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +51,7 @@ import com.rizzoplayer.iptv.data.model.TmdbEpisode
 import com.rizzoplayer.iptv.data.model.TmdbSeason
 import com.rizzoplayer.iptv.data.model.TmdbShow
 import com.rizzoplayer.iptv.ui.theme.*
+import com.rizzoplayer.iptv.ui.theme.gridTopRowFocus
 import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
 
 @Composable
@@ -54,7 +62,9 @@ fun SeriesHome(
     onSelectShow: (TmdbShow) -> Unit,
     onToggleFavorite: (TmdbShow) -> Unit,
     onPlayRecent: ((RecentItem) -> Unit)? = null,
-    onFocusPrefetch: ((Int) -> Unit)? = null
+    initialScrollIndex: Int = -1,
+    onScrollRestored: () -> Unit = {},
+    onScrollPositionChange: (Int) -> Unit = {}
 ) {
     val hero = content.items.firstOrNull()
     val heroBackdrop = hero?.backdropPath?.let {
@@ -73,7 +83,7 @@ fun SeriesHome(
             )
         }
         // Hero backdrop
-        if (heroBackdrop != null && hero != null) {
+        if (heroBackdrop != null) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -191,26 +201,41 @@ fun SeriesHome(
                 favorites = favorites,
                 onSelectShow = onSelectShow,
                 onToggleFavorite = onToggleFavorite,
-                onFocusPrefetch = onFocusPrefetch
+                initialScrollIndex = initialScrollIndex,
+                onScrollRestored = onScrollRestored,
+                onScrollPositionChange = onScrollPositionChange
             )
         }
     }
 }
-
+@OptIn(ExperimentalFoundationApi::class, FlowPreview::class)
 @Composable
 fun TmdbShowGrid(
     content: BrowseContent.TmdbShows,
     favorites: Map<String, Favorite>,
     onSelectShow: (TmdbShow) -> Unit,
     onToggleFavorite: (TmdbShow) -> Unit,
-    onFocusPrefetch: ((Int) -> Unit)? = null
+    initialScrollIndex: Int = -1,
+    onScrollRestored: () -> Unit = {},
+    onScrollPositionChange: (Int) -> Unit = {}
 ) {
     val firstFocus = remember { FocusRequester() }
     val listState = rememberLazyGridState()
     val context = LocalContext.current
     val imageLoader = remember { Coil.imageLoader(context) }
 
-    LaunchedEffect(content.items) { try { firstFocus.requestFocus() } catch (_: Exception) {} }
+    // Restore scroll position when returning via back navigation
+    LaunchedEffect(initialScrollIndex) {
+        if (initialScrollIndex >= 0 && listState.firstVisibleItemIndex == 0) {
+            listState.scrollToItem(initialScrollIndex)
+            onScrollRestored()
+        }
+    }
+
+    LaunchedEffect(content.items) {
+        withFrameNanos { } // ensure layout is attached before requesting focus
+        try { firstFocus.requestFocus() } catch (_: Exception) {}
+    }
 
     LaunchedEffect(listState.firstVisibleItemIndex) {
         val firstVisible = listState.firstVisibleItemIndex
@@ -229,30 +254,36 @@ fun TmdbShowGrid(
         }
     }
 
+    // Report scroll position to caller for back-navigation restoration
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .debounce(300L)
+            .collect { idx -> onScrollPositionChange(idx) }
+    }
+
     LazyVerticalGrid(
         state = listState,
         columns = GridCells.Adaptive(120.dp),
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .gridTopRowFocus(firstFocus),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(content.items, key = { it.id }, contentType = { "TmdbShow" }) { show ->
             val isFirst = content.items.firstOrNull()?.id == show.id
-            var focused by remember { mutableStateOf(false) }
             TmdbPosterCard(
                 title = show.name,
                 posterPath = show.posterPath,
                 rating = show.rating,
                 year = show.firstAirDate.take(4),
                 overview = show.overview,
-                isFocused = focused,
                 isFavorite = favorites.containsKey(show.id.toString()),
-                onFocusChanged = { focused = it },
                 onClick = { onSelectShow(show) },
                 onLongClick = { onToggleFavorite(show) },
-                onFocusPrefetch = onFocusPrefetch,
-                prefetchId = show.id,
+
                 modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier,
                 cardWidth = 120.dp,
                 posterHeight = 180.dp
@@ -273,7 +304,6 @@ fun TmdbShowDetailView(
     val backdrop = show.backdropPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_BACKDROP_SIZE}$it" }
     val poster = show.posterPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}$it" }
     var selectedSeasonIdx by remember { mutableIntStateOf(0) }
-    val seasonFocus = remember { FocusRequester() }
     val episodeFocus = remember { FocusRequester() }
     var episodeFocusTrigger by remember { mutableIntStateOf(0) }
 
@@ -379,19 +409,20 @@ fun TmdbShowDetailView(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 seasons.forEachIndexed { idx, season ->
-                    var focused by remember { mutableStateOf(false) }
+                    val seasonInteractionSource = remember { MutableInteractionSource() }
+                    val seasonFocused by seasonInteractionSource.collectIsFocusedAsState()
                     val isSelected = idx == selectedSeasonIdx
                     Text(
                         season.name,
                         fontSize = 12.sp,
-                        color = if (isSelected) AccentBlue else if (focused) TextPrimary else TextMuted,
-                        fontWeight = if (isSelected || focused) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) AccentBlue else if (seasonFocused) TextPrimary else TextMuted,
+                        fontWeight = if (isSelected || seasonFocused) FontWeight.Bold else FontWeight.Normal,
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
                             .background(if (isSelected) AccentBlue.copy(alpha = 0.2f) else Color.Transparent)
-                            .then(if (focused && !isSelected) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(4.dp)) else Modifier)
-                            .onFocusChanged { focused = it.isFocused }
-                            .focusable()
+                            .then(if (seasonFocused && !isSelected) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(4.dp)) else Modifier)
+                            .onFocusChanged { if (it.isFocused && !isSelected) { selectedSeasonIdx = idx; episodeFocusTrigger++ } }
+                            .focusable(interactionSource = seasonInteractionSource)
                             .clickable {
                                 selectedSeasonIdx = idx
                                 episodeFocusTrigger++
@@ -432,18 +463,17 @@ fun TmdbEpisodeRow(
     onFavToggle: () -> Unit,
     onFocus: FocusRequester
 ) {
-    var focused by remember { mutableStateOf(false) }
     val stillUrl = episode.stillPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/w185$it" }
-
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
-            .background(if (focused) NavFocusBg else Color.Transparent)
-            .then(if (focused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
-            .onFocusChanged { focused = it.isFocused }
+            .background(if (isFocused) NavFocusBg else Color.Transparent)
+            .then(if (isFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
+            .focusable(interactionSource = interactionSource)
             .focusRequester(onFocus)
-            .focusable()
             .clickable(onClick = onPlay)
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -495,8 +525,8 @@ fun TmdbEpisodeRow(
             Text(
                 episode.name.ifEmpty { "Episode ${episode.episodeNumber}" },
                 fontSize = 12.sp,
-                color = if (focused) TextPrimary else TextMuted,
-                fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (isFocused) TextPrimary else TextMuted,
+                fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -507,7 +537,7 @@ fun TmdbEpisodeRow(
                     Text(" · ${episode.runtime}m", fontSize = 10.sp, color = TextMuted.copy(alpha = 0.7f))
                 }
             }
-            if (focused && episode.overview.isNotEmpty()) {
+            if (isFocused && episode.overview.isNotEmpty()) {
                 Spacer(Modifier.height(3.dp))
                 Text(
                     episode.overview,

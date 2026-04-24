@@ -274,10 +274,16 @@ class TmdbRepository(
         coalesceKey = "tmdb_v3_search_show_${query.trim().lowercase()}"
     ) { tmdb.searchShows(query).results }
 
-    suspend fun searchAll(query: String): Pair<List<TmdbMovie>, List<TmdbShow>> = coroutineScope {
-        val movies = async { tmdb.searchMovies(query).results }
-        val shows  = async { tmdb.searchShows(query).results }
-        movies.await() to shows.await()
+    suspend fun searchAll(query: String): Pair<List<TmdbMovie>, List<TmdbShow>> {
+        return withContext(Dispatchers.IO) {
+            val moviesDeferred = async { searchMovies(query) }
+            val showsDeferred  = async { searchShows(query) }
+            try {
+                moviesDeferred.await() to showsDeferred.await()
+            } catch (_: Exception) {
+                emptyList<TmdbMovie>() to emptyList<TmdbShow>()
+            }
+        }
     }
 
     private suspend fun cachedTorrentio(key: String, fetch: suspend () -> List<TorrentioStream>): List<TorrentioStream> {

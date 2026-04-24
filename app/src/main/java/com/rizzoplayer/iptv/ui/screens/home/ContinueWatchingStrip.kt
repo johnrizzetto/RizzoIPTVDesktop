@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -14,7 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -58,7 +59,8 @@ fun ContinueWatchingStrip(items: List<RecentItem>, onPlay: (RecentItem) -> Unit)
 
 @Composable
 private fun RecentCard(item: RecentItem, store: PlaybackPositionStore, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
     var fraction by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(item.id, item.type) {
         val p = store.getProgress("${item.type}:${item.id}")
@@ -68,13 +70,12 @@ private fun RecentCard(item: RecentItem, store: PlaybackPositionStore, onClick: 
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(if (focused) AccentBlue.copy(alpha = 0.25f) else CardBg)
-            .then(if (focused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.6f), RoundedCornerShape(6.dp)) else Modifier)
+            .background(if (isFocused) AccentBlue.copy(alpha = 0.25f) else CardBg)
+            .then(if (isFocused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.6f), RoundedCornerShape(6.dp)) else Modifier)
     ) {
         Row(
             modifier = Modifier
-                .onFocusChanged { focused = it.isFocused }
-                .focusable()
+                .focusable(interactionSource = interactionSource)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -84,7 +85,7 @@ private fun RecentCard(item: RecentItem, store: PlaybackPositionStore, onClick: 
             Text(
                 item.name,
                 fontSize = 11.sp,
-                color = if (focused) Color.White else TextPrimary,
+                color = if (isFocused) Color.White else TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 110.dp)

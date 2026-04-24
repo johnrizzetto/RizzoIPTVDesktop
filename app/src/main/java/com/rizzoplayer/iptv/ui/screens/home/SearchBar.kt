@@ -39,7 +39,6 @@ fun SearchBar(
     focusRequester: FocusRequester = remember { FocusRequester() },
     downTarget: FocusRequester? = null
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     var focused by remember { mutableStateOf(false) }
 
     val voiceLauncher = rememberLauncherForActivityResult(

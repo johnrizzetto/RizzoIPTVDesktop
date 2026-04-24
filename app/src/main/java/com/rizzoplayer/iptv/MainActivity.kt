@@ -18,6 +18,7 @@ import com.rizzoplayer.iptv.data.repository.TmdbRepository
 import com.rizzoplayer.iptv.data.api.TmdbApiService
 import com.rizzoplayer.iptv.data.api.TorrentioService
 import com.rizzoplayer.iptv.data.api.TorBoxApiService
+import com.rizzoplayer.iptv.data.api.TorBoxSearchService
 import com.rizzoplayer.iptv.data.repository.TorBoxRepository
 import com.rizzoplayer.iptv.ui.player.PlayerActivity
 import com.rizzoplayer.iptv.ui.screens.HomeScreen
@@ -68,7 +69,8 @@ class MainActivity : ComponentActivity() {
         )
         val torBoxRepository = TorBoxRepository(
             torBox = TorBoxApiService(applicationContext),
-            torrentio = TorrentioService(applicationContext)
+            torrentio = TorrentioService(applicationContext),
+            torBoxSearch = TorBoxSearchService(applicationContext)
         )
         val serversStore = ServersStore(applicationContext)
         val factory = ViewModelFactory(repository, tmdbRepository, torBoxRepository, serversStore, app.preferencesStore, app)
