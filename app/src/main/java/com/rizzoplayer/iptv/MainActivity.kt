@@ -19,6 +19,7 @@ import com.rizzoplayer.iptv.data.api.TmdbApiService
 import com.rizzoplayer.iptv.data.api.TorrentioService
 import com.rizzoplayer.iptv.data.api.TorBoxApiService
 import com.rizzoplayer.iptv.data.api.TorBoxSearchService
+import com.rizzoplayer.iptv.data.model.Credentials
 import com.rizzoplayer.iptv.data.repository.TorBoxRepository
 import com.rizzoplayer.iptv.ui.player.PlayerActivity
 import com.rizzoplayer.iptv.ui.screens.HomeScreen
@@ -31,6 +32,19 @@ import com.rizzoplayer.iptv.ui.viewmodel.ViewModelFactory
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+
+object DefaultCredentials {
+    const val USERNAME = "87bcb5ed3f"
+    const val PASSWORD = "c46e2b805d"
+    val URLS = listOf(
+        "http://line.trexgaminghub.xyz",
+        "http://line.gaminghubott.xyz",
+        "http://vpn.gaminghubott.xyz",
+        "http://line.gaminghubpro.xyz",
+        "http://vpn.gaminghubpro.xyz"
+    )
+    const val DEFAULT_URL = "http://line.trexgaminghub.xyz"
+}
 
 class MainActivity : ComponentActivity() {
 
@@ -48,6 +62,19 @@ class MainActivity : ComponentActivity() {
             pendingPlayEvent = null
             mainVm?.onPlaybackError()
         }
+    }
+
+    private suspend fun autoLoginIfNeeded(repository: IPTVRepository): Boolean {
+        val existing = repository.credentialsStore.credentials.first()
+        if (existing != null) return existing.isValid()
+        repository.credentialsStore.save(
+            Credentials(
+                url = DefaultCredentials.DEFAULT_URL,
+                username = DefaultCredentials.USERNAME,
+                password = DefaultCredentials.PASSWORD
+            )
+        )
+        return true
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,6 +108,9 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     isLoggedIn = repository.credentialsStore.credentials.first() != null
+                    if (!isLoggedIn!!) {
+                        isLoggedIn = autoLoginIfNeeded(repository)
+                    }
                 }
 
                 if (isLoggedIn == null) return@RizzoIPTVTheme
