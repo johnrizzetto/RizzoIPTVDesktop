@@ -17,15 +17,18 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 
 @OptIn(ExperimentalSerializationApi::class)
-class TmdbApiService(context: Context) {
+class TmdbApiService(context: Context, private val baseUrl: String = "https://api.themoviedb.org/3") {
 
     private val client = NetworkClient.base(context).newBuilder()
         // Inject Bearer token on every TMDB request (v4 read-access token)
         .addInterceptor { chain: Interceptor.Chain ->
+            val token = BuildConfig.TMDB_BEARER
+            require(token.isNotBlank()) { "TMDB_BEARER is not set in local.properties" }
             val request = chain.request().newBuilder()
-                .header("Authorization", "Bearer ${BuildConfig.TMDB_BEARER}")
+                .header("Authorization", "Bearer $token")
                 .build()
             chain.proceed(request)
         }
@@ -54,11 +57,14 @@ class TmdbApiService(context: Context) {
         isLenient = true
         namingStrategy = JsonNamingStrategy.SnakeCase
     }
-    private val baseUrl = "https://api.themoviedb.org/3"
 
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).build()
-        client.newCall(request).execute().use { it.body?.string() ?: "" }
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw IOException("TMDB API error: ${response.code} ${response.message}")
+        }
+        response.use { it.body?.string() ?: "" }
     }
 
     private fun tmdbUrl(path: String, vararg pairs: Pair<String, String>): String {
