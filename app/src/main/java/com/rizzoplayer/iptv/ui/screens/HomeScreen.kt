@@ -334,6 +334,13 @@ private fun MoviesContent(
         q.isNotEmpty() -> {
             // If searchQuery is set but content hasn't loaded yet, show loading.
             // Once content is TmdbSearchResults, show results; otherwise keep polling via LoadingView.
+            if (state.error != null) {
+                ErrorView(
+                    message = state.error,
+                    onDismiss = viewModel::clearError,
+                    onReload = viewModel::retryReload
+                )
+            }
             if (state.content is BrowseContent.TmdbSearchResults) {
                 val searchContent = state.content as BrowseContent.TmdbSearchResults
                 if (searchContent.movies.isNotEmpty()) {
@@ -422,6 +429,13 @@ private fun ShowsContent(
             onReload = viewModel::retryReload
         )
         q.isNotEmpty() -> {
+            if (state.error != null) {
+                ErrorView(
+                    message = state.error,
+                    onDismiss = viewModel::clearError,
+                    onReload = viewModel::retryReload
+                )
+            }
             if (state.content is BrowseContent.TmdbSearchResults) {
                 val searchContent = state.content as BrowseContent.TmdbSearchResults
                 if (searchContent.shows.isNotEmpty()) {
