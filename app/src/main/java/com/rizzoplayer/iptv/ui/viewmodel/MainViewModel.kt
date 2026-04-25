@@ -636,6 +636,11 @@ class MainViewModel(
         _state.update { it.copy(error = null) }
     }
 
+    /** Clear error state without reloading. */
+    fun clearError() {
+        _state.update { it.copy(error = null) }
+    }
+
     /**
      * Re-execute the last content load block, refetching data.
      * Used when user explicitly taps "Reload" after a failed load.
@@ -1153,15 +1158,6 @@ class MainViewModel(
         }
     }
 
-    /** Set shimmer loading state immediately (before content fetch) so shimmer renders while hero stays visible. */
-    fun setGridLoading() {
-        _state.update { it.copy(isGridLoading = true) }
-    }
-
-    /** Clear shimmer loading state. */
-    fun clearGridLoading() {
-        _state.update { it.copy(isGridLoading = false) }
-    }
 
     private fun List<Category>.sortedByUS() = sortedWith { a, b ->
         val aUS = a.name.contains("US|") || a.name.startsWith("US") || a.name.contains("|US")
