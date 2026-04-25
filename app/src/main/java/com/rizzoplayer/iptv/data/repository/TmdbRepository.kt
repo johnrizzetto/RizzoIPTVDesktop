@@ -61,8 +61,10 @@ class TmdbRepository(
         }
         return try {
             val result = if (coalesceKey != null) coalesced(coalesceKey) { fetch() } else fetch()
-            val text = withContext(Dispatchers.Default) { json.encodeToString(result) }
-            diskCache.put(key, text)
+            if (result.isNotEmpty()) {
+                val text = withContext(Dispatchers.Default) { json.encodeToString(result) }
+                diskCache.put(key, text)
+            }
             result
         } catch (e: Exception) {
             emptyList()
@@ -277,12 +279,8 @@ class TmdbRepository(
     suspend fun searchAll(query: String): Pair<List<TmdbMovie>, List<TmdbShow>> {
         return withContext(Dispatchers.IO) {
             val moviesDeferred = async { searchMovies(query) }
-            val showsDeferred  = async { searchShows(query) }
-            try {
-                moviesDeferred.await() to showsDeferred.await()
-            } catch (_: Exception) {
-                emptyList<TmdbMovie>() to emptyList<TmdbShow>()
-            }
+            val showsDeferred = async { searchShows(query) }
+            moviesDeferred.await() to showsDeferred.await()
         }
     }
 
