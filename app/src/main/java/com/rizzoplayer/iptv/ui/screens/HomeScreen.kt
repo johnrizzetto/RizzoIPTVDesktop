@@ -184,19 +184,15 @@ fun HomeScreen(viewModel: MainViewModel) {
                     modifier = Modifier.fillMaxSize()
                 ) {
                     composable(Screen.Live.route) {
-                        LaunchedEffect(Unit) { viewModel.selectSection(Section.LIVE) }
                         LiveContent(viewModel, state, favorites, favoritesList)
                     }
                     composable(Screen.Movies.route) {
-                        LaunchedEffect(Unit) { viewModel.selectSection(Section.VOD) }
                         MoviesContent(viewModel, state, favorites, favoritesList, continueWatching)
                     }
                     composable(Screen.Shows.route) {
-                        LaunchedEffect(Unit) { viewModel.selectSection(Section.SERIES) }
                         ShowsContent(viewModel, state, favorites, favoritesList, continueWatching)
                     }
                     composable(Screen.Favorites.route) {
-                        LaunchedEffect(Unit) { viewModel.selectSection(Section.FAVORITES) }
                         FavoritesContent(viewModel, favoritesList)
                     }
                     composable(Screen.Settings.route) {

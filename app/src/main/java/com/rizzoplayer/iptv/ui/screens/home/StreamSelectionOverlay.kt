@@ -333,10 +333,9 @@ private fun formatSeeders(n: Int): String = when {
     else        -> n.toString()
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// PREMIUM STREAM SELECTION OVERLAY
-// ═══════════════════════════════════════════════════════════════════════════════
+// PREMIUM STREAM SELECTION OVERLAY — replaced by StreamPickerScreen (Phase 4)
 
+@Deprecated("Replaced by StreamPickerScreen in Phase 4")
 @Composable
 fun PremiumStreamSelectionOverlay(
     title: String,
