@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -55,6 +56,7 @@ import com.rizzoplayer.iptv.ui.theme.gridTopRowFocus
 import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusGroup
 import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SeriesHome(
     content: BrowseContent.TmdbShows,
@@ -68,7 +70,23 @@ fun SeriesHome(
     onScrollRestored: () -> Unit = {},
     onScrollPositionChange: (Int) -> Unit = {}
 ) {
-    val hero = content.items.firstOrNull()
+    // Hero auto-rotation state
+    val heroItems = content.items.take(10) // showcase up to 10 items
+    var heroIndex by remember { mutableIntStateOf(0) }
+    val posterInteractionSource = remember { MutableInteractionSource() }
+    val isPosterFocused by posterInteractionSource.collectIsFocusedAsState()
+
+    // Auto-rotate hero every 8000ms, pausing when hero poster is focused
+    LaunchedEffect(isPosterFocused) {
+        if (!isPosterFocused && heroItems.size > 1) {
+            while (true) {
+                kotlinx.coroutines.delay(Spec.heroRotateMs)
+                heroIndex = (heroIndex + 1) % heroItems.size
+            }
+        }
+    }
+
+    val hero = heroItems.getOrNull(heroIndex) ?: heroItems.firstOrNull()
     val heroBackdrop = hero?.backdropPath?.let {
         "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_BACKDROP_SIZE}$it"
     }
@@ -140,6 +158,12 @@ fun SeriesHome(
                                 .width(80.dp)
                                 .height(120.dp)
                                 .clip(RoundedCornerShape(8.dp))
+                                .focusable(interactionSource = posterInteractionSource)
+                                .combinedClickable(
+                                    interactionSource = posterInteractionSource,
+                                    indication = null,
+                                    onClick = { hero?.let { onSelectShow(it) } }
+                                )
                         )
                         Spacer(Modifier.width(14.dp))
                     }

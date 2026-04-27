@@ -65,6 +65,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MoviesHome(
     content: BrowseContent.TmdbMovies,
@@ -78,7 +79,23 @@ fun MoviesHome(
     onScrollRestored: () -> Unit = {},
     onScrollPositionChange: (Int) -> Unit = {}
 ) {
-    val hero = content.items.firstOrNull()
+    // Hero auto-rotation state
+    val heroItems = content.items.take(10) // showcase up to 10 items
+    var heroIndex by remember { mutableIntStateOf(0) }
+    val posterInteractionSource = remember { MutableInteractionSource() }
+    val isPosterFocused by posterInteractionSource.collectIsFocusedAsState()
+
+    // Auto-rotate hero every 8000ms, pausing when hero poster is focused
+    LaunchedEffect(isPosterFocused) {
+        if (!isPosterFocused && heroItems.size > 1) {
+            while (true) {
+                kotlinx.coroutines.delay(Spec.heroRotateMs)
+                heroIndex = (heroIndex + 1) % heroItems.size
+            }
+        }
+    }
+
+    val hero = heroItems.getOrNull(heroIndex) ?: heroItems.firstOrNull()
     val heroBackdrop = hero?.backdropPath?.let {
         "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_BACKDROP_SIZE}$it"
     }
@@ -149,6 +166,12 @@ fun MoviesHome(
                                 .width(80.dp)
                                 .height(120.dp)
                                 .clip(RoundedCornerShape(8.dp))
+                                .focusable(interactionSource = posterInteractionSource)
+                                .combinedClickable(
+                                    interactionSource = posterInteractionSource,
+                                    indication = null,
+                                    onClick = { hero?.let { onSelectMovie(it) } }
+                                )
                         )
                         Spacer(Modifier.width(14.dp))
                     }
@@ -329,7 +352,7 @@ fun TmdbPosterCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isCardFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isCardFocused) 1.05f else 1f,
+        targetValue = if (isCardFocused) 1.06f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "cardScale"
     )
@@ -343,7 +366,7 @@ fun TmdbPosterCard(
                 .focusable(interactionSource = interactionSource)
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick)
                 .then(
-                    if (isCardFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(8.dp))
+                    if (isCardFocused) Modifier.border(4.dp, AccentBlue, RoundedCornerShape(8.dp))
                     else Modifier
                 ),
             shape = RoundedCornerShape(8.dp),

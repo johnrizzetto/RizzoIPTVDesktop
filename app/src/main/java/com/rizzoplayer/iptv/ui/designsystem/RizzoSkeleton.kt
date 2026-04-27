@@ -18,7 +18,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.rizzoplayer.iptv.ui.theme.RizzoRadii
 import com.rizzoplayer.iptv.ui.theme.RizzoShimmerBase
 import com.rizzoplayer.iptv.ui.theme.RizzoShimmerHighlight
+import com.rizzoplayer.iptv.ui.theme.Spec
 
 /**
  * Infinite transition for shimmer animation.
@@ -78,6 +83,7 @@ private fun ShimmerRect(
 
 /**
  * Skeleton poster placeholder — a rounded rectangle with shimmer.
+ * Shows shimmer only after skeletonGraceMs to avoid flashing on fast loads.
  *
  * @param ratio  Aspect ratio from [RizzoPosterRatio]
  * @param modifier Standard modifier
@@ -87,13 +93,23 @@ fun RizzoSkeletonPoster(
     modifier: Modifier = Modifier,
     ratio: Float = RizzoPosterRatio.Poster2x3,
 ) {
-    ShimmerRect(
-        modifier = modifier.aspectRatio(ratio),
-    )
+    var showShimmer by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(Spec.skeletonGraceMs)
+        showShimmer = true
+    }
+    if (showShimmer) {
+        ShimmerRect(
+            modifier = modifier.aspectRatio(ratio),
+        )
+    } else {
+        Box(modifier = modifier.aspectRatio(ratio))
+    }
 }
 
 /**
  * Skeleton text line placeholder.
+ * Shows shimmer only after skeletonGraceMs to avoid flashing on fast loads.
  *
  * @param width  Fraction of container width (0–1), or null for full-width
  * @param height Height of the line (default 16.dp)
@@ -104,14 +120,21 @@ fun RizzoSkeletonLine(
     widthFraction: Float? = null,
     height: Dp = 16.dp,
 ) {
-    ShimmerRect(
-        modifier = modifier
-            .then(
-                if (widthFraction != null) Modifier.fillMaxWidth(widthFraction)
-                else Modifier.fillMaxWidth(),
-            )
-            .height(height),
-    )
+    var showShimmer by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(Spec.skeletonGraceMs)
+        showShimmer = true
+    }
+    val widthMod = if (widthFraction != null) Modifier.fillMaxWidth(widthFraction) else Modifier.fillMaxWidth()
+    if (showShimmer) {
+        ShimmerRect(
+            modifier = modifier
+                .then(widthMod)
+                .height(height),
+        )
+    } else {
+        Box(modifier = modifier.then(widthMod).height(height))
+    }
 }
 
 /**

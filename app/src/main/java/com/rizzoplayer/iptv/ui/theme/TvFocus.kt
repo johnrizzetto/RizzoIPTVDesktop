@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.dp
 fun Modifier.tvClickable(
     onClick: () -> Unit,
     shape: Shape = RoundedCornerShape(8.dp),
-    focusBorderWidth: Dp = 2.dp,
+    focusBorderWidth: Dp = 4.dp,
     focusBorderColor: Color = AccentBlue,
     focusBackgroundColor: Color = AccentBlue.copy(alpha = 0.14f),
 ): Modifier = composed {
@@ -102,5 +102,5 @@ fun Modifier.gridTopRowFocus(firstItemFocus: FocusRequester): Modifier =
  * Default TV card focus scale — 1.04x on focus, 0.95x on press.
  * Use with animateFloatAsState(targetValue = ..., animationSpec = TvCardSpringSpec).
  */
-const val TV_CARD_FOCUS_SCALE = 1.04f
+const val TV_CARD_FOCUS_SCALE = 1.06f
 const val TV_CARD_PRESS_SCALE  = 0.95f

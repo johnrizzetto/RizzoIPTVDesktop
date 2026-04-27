@@ -13,7 +13,7 @@ object RizzoElevation {
     val Card = 2.dp
 
     /** 4.dp — card focused, nav items */
-    val Focused = 4.dp
+    val Focused = 8.dp
 
     /** 8.dp — dialogs, bottom sheets */
     val Modal = 8.dp
