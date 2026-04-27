@@ -372,6 +372,8 @@ class MainViewModel(
                         return@collect
                     }
                     searchJob = viewModelScope.launch {
+                        // Reset loading flag first — guarantees spinner clears even if the
+                        // previous job was stuck and this one is still running.
                         _state.update { it.copy(isSearchLoading = true, error = null) }
                         try {
                             val result = withContext(Dispatchers.IO) {
@@ -381,6 +383,7 @@ class MainViewModel(
                             }
                             val (movies, shows) = result
                             ensureActive()
+                            // Only update content if the query hasn't changed since we started
                             _state.update {
                                 if (it.searchQuery.trim() != query) it
                                 else it.copy(
