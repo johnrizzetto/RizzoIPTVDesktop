@@ -22,6 +22,7 @@ sealed class StreamResolution {
     data object Searching : StreamResolution()
     data object Queuing : StreamResolution()
     data class Caching(val percent: Int) : StreamResolution()
+    data class TryingNextStream(val attempt: Int, val total: Int) : StreamResolution()
     data class Ready(val url: String, val fallbackHashes: List<String> = emptyList()) : StreamResolution()
     data class Failed(val reason: String) : StreamResolution()
 }

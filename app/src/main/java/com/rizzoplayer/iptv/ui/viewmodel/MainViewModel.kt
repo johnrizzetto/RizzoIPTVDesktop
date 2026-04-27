@@ -3,7 +3,6 @@ package com.rizzoplayer.iptv.ui.viewmodel
 import android.app.Application
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -95,6 +94,8 @@ data class MainUiState(
     val isSearchLoading: Boolean = false,
     val tmdbStreamSelection: TmdbStreamSelectionState? = null,
     val playbackPrep: PlaybackPrep? = null,
+    val lastPlaybackSelection: TmdbStreamSelectionState? = null,
+    val lastPlaybackStreamIndex: Int = 0,
     val parentalLockActive: Boolean = false,
 )
 
@@ -113,6 +114,10 @@ class MainViewModel(
 
     private val _state = MutableStateFlow(MainUiState())
     val state: StateFlow<MainUiState> = _state.asStateFlow()
+
+    // Dedicated MutableStateFlow for search — observed directly by the debounce
+    // flow, bypassing snapshotFlow (which only sees Compose-snapshot-thread changes).
+    private val _searchQuery = MutableStateFlow("")
 
     /** Derives NavHost route from state.section — stays in sync automatically. */
     val currentRoute: StateFlow<String> = _state.map { state ->
@@ -250,6 +255,10 @@ class MainViewModel(
                         is StreamResolution.Caching -> {
                             _state.update { it.copy(playbackPrep = PlaybackPrep(currentPlaybackTitle, PlaybackPrep.Stage.CACHING, "Caching fallback ${resolution.percent}%")) }
                         }
+                        is StreamResolution.TryingNextStream -> {
+                            // Fallback resolves one hash at a time; next stream attempt is handled by onPlaybackError loop
+                            _state.update { it.copy(playbackPrep = PlaybackPrep(currentPlaybackTitle, PlaybackPrep.Stage.CACHING, "Trying fallback...")) }
+                        }
                         is StreamResolution.Ready -> {
                             currentFallbackHashes = emptyList()
                             _state.update { it.copy(playbackPrep = null) }
@@ -357,50 +366,54 @@ class MainViewModel(
         }
 
         viewModelScope.launch {
-            snapshotFlow { _state.value.searchQuery }
-                .debounce(SEARCH_DEBOUNCE_MS)
-                .distinctUntilChanged()
-                .collect { rawQuery ->
-                    searchJob?.cancel()
-                    val query = rawQuery.trim()
-                    if (query.length < 2) {
-                        _state.update {
-                            if (it.content is BrowseContent.TmdbSearchResults)
-                                it.copy(content = BrowseContent.Empty, isSearchLoading = false)
-                            else it.copy(isSearchLoading = false)
-                        }
-                        return@collect
-                    }
-                    searchJob = viewModelScope.launch {
-                        // Reset loading flag first — guarantees spinner clears even if the
-                        // previous job was stuck and this one is still running.
-                        _state.update { it.copy(isSearchLoading = true, error = null) }
-                        try {
-                            val result = withContext(Dispatchers.IO) {
-                                kotlinx.coroutines.withTimeout(18_000L) {
-                                    tmdbRepository.searchAll(query)
-                                }
-                            }
-                            val (movies, shows) = result
-                            ensureActive()
-                            // Only update content if the query hasn't changed since we started
+            try {
+                _searchQuery
+                    .debounce(SEARCH_DEBOUNCE_MS)
+                    .distinctUntilChanged()
+                    .collect { rawQuery ->
+                        searchJob?.cancel()
+                        val query = rawQuery.trim()
+                        if (query.length < 2) {
                             _state.update {
-                                if (it.searchQuery.trim() != query) it
-                                else it.copy(
-                                    content = BrowseContent.TmdbSearchResults(movies, shows, query),
-                                    isSearchLoading = false,
-                                    canGoBack = backStack.isNotEmpty()
-                                )
+                                if (it.content is BrowseContent.TmdbSearchResults)
+                                    it.copy(content = BrowseContent.Empty, isSearchLoading = false)
+                                else it.copy(isSearchLoading = false)
                             }
-                        } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
-                            _state.update { it.copy(isSearchLoading = false, error = "Search timed out") }
-                        } catch (_: CancellationException) {
-                            // expected on next keystroke; do nothing
-                        } catch (e: Exception) {
-                            _state.update { it.copy(isSearchLoading = false, error = e.message ?: "Search failed") }
+                            return@collect
+                        }
+                        searchJob = viewModelScope.launch {
+                            // Reset loading flag first — guarantees spinner clears even if the
+                            // previous job was stuck and this one is still running.
+                            _state.update { it.copy(isSearchLoading = true, error = null) }
+                            try {
+                                val result = withContext(Dispatchers.IO) {
+                                    kotlinx.coroutines.withTimeout(18_000L) {
+                                        tmdbRepository.searchAll(query)
+                                    }
+                                }
+                                val (movies, shows) = result
+                                ensureActive()
+                                // Only update content if the query hasn't changed since we started
+                                _state.update {
+                                    if (it.searchQuery.trim() != query) it
+                                    else it.copy(
+                                        content = BrowseContent.TmdbSearchResults(movies, shows, query),
+                                        isSearchLoading = false,
+                                        canGoBack = backStack.isNotEmpty()
+                                    )
+                                }
+                            } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+                                _state.update { it.copy(isSearchLoading = false, error = "Search timed out") }
+                            } catch (_: CancellationException) {
+                                // expected on next keystroke; do nothing
+                            } catch (e: Exception) {
+                                _state.update { it.copy(isSearchLoading = false, error = e.message ?: "Search failed") }
+                            }
                         }
                     }
-                }
+            } catch (t: Throwable) {
+                android.util.Log.e("SEARCH_DEBUG", "search debounce collect threw", t)
+            }
         }
 
         viewModelScope.launch {
@@ -636,23 +649,28 @@ class MainViewModel(
     }
 
     fun selectTmdbMovie(movie: TmdbMovie) {
+        android.util.Log.d("NAV_DEBUG", "selectTmdbMovie CALLED: movie=${movie.title}, content=${_state.value.content::class.simpleName}, canGoBack=${_state.value.canGoBack}")
         backStack.addLast(_state.value.content to 0)
         _state.update { it.copy(content = BrowseContent.TmdbMovieDetail(movie), canGoBack = true) }
+        android.util.Log.d("NAV_DEBUG", "selectTmdbMovie AFTER: content=${_state.value.content::class.simpleName}, canGoBack=${_state.value.canGoBack}, searchQuery='${_state.value.searchQuery}'")
     }
 
     fun goBack() {
-    if (backStack.isEmpty()) { selectSection(_state.value.section); return }
-    val (savedContent, scrollPos) = backStack.removeLast()
-    val isGrid = savedContent is BrowseContent.TmdbMovies || savedContent is BrowseContent.TmdbShows
-    _state.update {
-        it.copy(
-            content = savedContent,
-            canGoBack = backStack.isNotEmpty(),
-            searchQuery = "",
-            restoreScrollIndex = if (isGrid) -1 else scrollPos,
-            restoreGridScrollIndex = if (isGrid) scrollPos else -1
-        )
-    }
+        android.util.Log.d("NAV_DEBUG", "goBack CALLED: backStack.size=${backStack.size}, content=${_state.value.content::class.simpleName}, searchQuery='${_state.value.searchQuery}'")
+        if (backStack.isEmpty()) { selectSection(_state.value.section); return }
+        val (savedContent, scrollPos) = backStack.removeLast()
+        val isGrid = savedContent is BrowseContent.TmdbMovies || savedContent is BrowseContent.TmdbShows
+        _state.update {
+            it.copy(
+                content = savedContent,
+                canGoBack = backStack.isNotEmpty(),
+                // Only clear searchQuery when returning to a regular browse grid,
+                // not when returning to search results.
+                searchQuery = if (savedContent is BrowseContent.TmdbSearchResults) it.searchQuery else "",
+                restoreScrollIndex = if (isGrid) -1 else scrollPos,
+                restoreGridScrollIndex = if (isGrid) scrollPos else -1
+            )
+        }
 }
 
     fun clearGridScrollRestore() {
@@ -722,6 +740,20 @@ class MainViewModel(
         playbackPrepJob?.cancel()
         playbackPrepJob = null
         _state.update { it.copy(playbackPrep = null) }
+    }
+
+    /**
+     * Retry the last failed playback by re-attempting the stream at lastPlaybackStreamIndex.
+     * Falls back to stream selection overlay if no saved selection exists.
+     */
+    fun retryPlaybackPrep() {
+        val selection = _state.value.lastPlaybackSelection ?: run {
+            _state.update { it.copy(playbackPrep = null) }
+            return
+        }
+        val streams = selection.streams
+        val idx = _state.value.lastPlaybackStreamIndex.coerceIn(0, streams.lastIndex)
+        playSelectedTmdbStream(streams[idx])
     }
 
     fun clearToast() {
@@ -811,7 +843,14 @@ class MainViewModel(
 
     fun playSelectedTmdbStream(stream: UnifiedTorrent) {
         val selection = _state.value.tmdbStreamSelection ?: return
-        _state.update { it.copy(tmdbStreamSelection = null) }
+        val streamIndex = selection.streams.indexOfFirst { it.url == stream.url }.coerceAtLeast(0)
+        _state.update {
+            it.copy(
+                tmdbStreamSelection = null,
+                lastPlaybackSelection = selection,
+                lastPlaybackStreamIndex = streamIndex,
+            )
+        }
         currentFallbackHashes = selection.streams
             .filter { it.url != stream.url }
             .mapNotNull { it.hash }
@@ -831,6 +870,20 @@ class MainViewModel(
                     }
                     is StreamResolution.Caching -> {
                         _state.update { it.copy(playbackPrep = PlaybackPrep(selection.title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
+                    }
+                    is StreamResolution.TryingNextStream -> {
+                        val nextIdx = resolution.attempt - 1
+                        val total = resolution.total
+                        _state.update {
+                            it.copy(
+                                lastPlaybackStreamIndex = nextIdx,
+                                playbackPrep = PlaybackPrep(
+                                    selection.title,
+                                    PlaybackPrep.Stage.CACHING,
+                                    "Stream ${resolution.attempt}/$total unavailable, trying next..."
+                                )
+                            )
+                        }
                     }
                     is StreamResolution.Ready -> {
                         _state.update { it.copy(isLoading = false, playbackPrep = null) }
@@ -874,6 +927,17 @@ class MainViewModel(
                             }
                             is StreamResolution.Caching -> {
                                 _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
+                            }
+                            is StreamResolution.TryingNextStream -> {
+                                _state.update {
+                                    it.copy(
+                                        playbackPrep = PlaybackPrep(
+                                            title,
+                                            PlaybackPrep.Stage.CACHING,
+                                            "Stream ${resolution.attempt}/${resolution.total} unavailable, trying next..."
+                                        )
+                                    )
+                                }
                             }
                             is StreamResolution.Ready -> {
                                 _state.update { it.copy(playbackPrep = null) }
@@ -919,6 +983,17 @@ class MainViewModel(
                                 is StreamResolution.Caching -> {
                                     _state.update { it.copy(playbackPrep = PlaybackPrep(item.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
                                 }
+                                is StreamResolution.TryingNextStream -> {
+                                    _state.update {
+                                        it.copy(
+                                            playbackPrep = PlaybackPrep(
+                                                item.name,
+                                                PlaybackPrep.Stage.CACHING,
+                                                "Stream ${resolution.attempt}/${resolution.total} unavailable, trying next..."
+                                            )
+                                        )
+                                    }
+                                }
                                 is StreamResolution.Ready -> {
                                     _state.update { it.copy(playbackPrep = null) }
                                     currentFallbackHashes = resolution.fallbackHashes
@@ -957,6 +1032,17 @@ class MainViewModel(
                                 }
                                 is StreamResolution.Caching -> {
                                     _state.update { it.copy(playbackPrep = PlaybackPrep(item.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
+                                }
+                                is StreamResolution.TryingNextStream -> {
+                                    _state.update {
+                                        it.copy(
+                                            playbackPrep = PlaybackPrep(
+                                                item.name,
+                                                PlaybackPrep.Stage.CACHING,
+                                                "Stream ${resolution.attempt}/${resolution.total} unavailable, trying next..."
+                                            )
+                                        )
+                                    }
                                 }
                                 is StreamResolution.Ready -> {
                                     _state.update { it.copy(playbackPrep = null) }
@@ -1017,6 +1103,17 @@ class MainViewModel(
                                 is StreamResolution.Caching -> {
                                     _state.update { it.copy(playbackPrep = PlaybackPrep(fav.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
                                 }
+                                is StreamResolution.TryingNextStream -> {
+                                    _state.update {
+                                        it.copy(
+                                            playbackPrep = PlaybackPrep(
+                                                fav.name,
+                                                PlaybackPrep.Stage.CACHING,
+                                                "Stream ${resolution.attempt}/${resolution.total} unavailable, trying next..."
+                                            )
+                                        )
+                                    }
+                                }
                                 is StreamResolution.Ready -> {
                                     _state.update { it.copy(playbackPrep = null) }
                                     currentFallbackHashes = resolution.fallbackHashes
@@ -1055,6 +1152,17 @@ class MainViewModel(
                                 }
                                 is StreamResolution.Caching -> {
                                     _state.update { it.copy(playbackPrep = PlaybackPrep(fav.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
+                                }
+                                is StreamResolution.TryingNextStream -> {
+                                    _state.update {
+                                        it.copy(
+                                            playbackPrep = PlaybackPrep(
+                                                fav.name,
+                                                PlaybackPrep.Stage.CACHING,
+                                                "Stream ${resolution.attempt}/${resolution.total} unavailable, trying next..."
+                                            )
+                                        )
+                                    }
                                 }
                                 is StreamResolution.Ready -> {
                                     _state.update { it.copy(playbackPrep = null) }
@@ -1121,7 +1229,10 @@ class MainViewModel(
 
     // ── Search ────────────────────────────────────────────────────────────
 
-    fun setSearchQuery(q: String) = _state.update { it.copy(searchQuery = q) }
+    fun setSearchQuery(q: String) {
+        _searchQuery.value = q
+        _state.update { it.copy(searchQuery = q) }
+    }
 
     // ── Favorites ─────────────────────────────────────────────────────────
 

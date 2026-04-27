@@ -258,7 +258,8 @@ fun HomeScreen(viewModel: MainViewModel) {
         state.playbackPrep?.let { prep ->
             PlaybackPrepOverlay(
                 prep = prep,
-                onCancel = viewModel::cancelPlaybackPrep
+                onCancel = viewModel::cancelPlaybackPrep,
+                onRetry = viewModel::retryPlaybackPrep,
             )
         }
     }
@@ -332,25 +333,43 @@ private fun MoviesContent(
             onReload = viewModel::retryReload
         )
         q.isNotEmpty() -> {
-            val searchContent = state.content as? BrowseContent.TmdbSearchResults
-            if (searchContent != null && searchContent.query.equals(q, ignoreCase = true)) {
-                if (searchContent.movies.isNotEmpty()) {
-                    TmdbSearchResultsContent(
-                        content = searchContent,
-                        favorites = favorites,
-                        viewModel = viewModel,
-                        filter = "movies",
-                        isLoading = state.isSearchLoading
-                    )
+            val detail = state.content as? BrowseContent.TmdbMovieDetail
+            if (detail != null) {
+                TmdbMovieDetailView(
+                    movie = detail.movie,
+                    isFavorite = favorites.containsKey(detail.movie.id.toString()),
+                    onPlay = { viewModel.onPlayTmdbMovie(detail.movie) },
+                    onToggleFavorite = {
+                        viewModel.toggleFavorite(
+                            id   = detail.movie.id.toString(),
+                            name = detail.movie.title,
+                            type = "tmdb_movie",
+                            icon = detail.movie.posterPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
+                        )
+                    },
+                    viewModel = viewModel
+                )
+            } else {
+                val searchContent = state.content as? BrowseContent.TmdbSearchResults
+                if (searchContent != null && searchContent.query.equals(q, ignoreCase = true)) {
+                    if (searchContent.movies.isNotEmpty()) {
+                        TmdbSearchResultsContent(
+                            content = searchContent,
+                            favorites = favorites,
+                            viewModel = viewModel,
+                            filter = "movies",
+                            isLoading = state.isSearchLoading
+                        )
+                    } else if (state.isSearchLoading) {
+                        LoadingView()
+                    } else {
+                        EmptyHint("No movies found")
+                    }
                 } else if (state.isSearchLoading) {
                     LoadingView()
                 } else {
-                    EmptyHint("No movies found")
+                    EmptyHint("Type at least 2 characters")
                 }
-            } else if (state.isSearchLoading) {
-                LoadingView()
-            } else {
-                EmptyHint("Type at least 2 characters")
             }
         }
         else -> when (val content = state.content) {
@@ -424,25 +443,44 @@ private fun ShowsContent(
             onReload = viewModel::retryReload
         )
         q.isNotEmpty() -> {
-            val searchContent = state.content as? BrowseContent.TmdbSearchResults
-            if (searchContent != null && searchContent.query.equals(q, ignoreCase = true)) {
-                if (searchContent.shows.isNotEmpty()) {
-                    TmdbSearchResultsContent(
-                        content = searchContent,
-                        favorites = favorites,
-                        viewModel = viewModel,
-                        filter = "shows",
-                        isLoading = state.isSearchLoading
-                    )
+            val detail = state.content as? BrowseContent.TmdbShowDetail
+            if (detail != null) {
+                TmdbShowDetailView(
+                    show = detail.show,
+                    seasons = detail.seasons,
+                    favorites = favorites,
+                    onPlay = { episode -> viewModel.onPlayTmdbEpisode(detail.show, episode) },
+                    onFavToggle = { episode ->
+                        viewModel.toggleFavorite(
+                            id = "${detail.show.id}:${episode.seasonNumber}:${episode.episodeNumber}",
+                            name = episode.name.ifEmpty { "Episode ${episode.episodeNumber}" },
+                            type = "tmdb_episode",
+                            icon = episode.stillPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
+                        )
+                    },
+                    viewModel = viewModel
+                )
+            } else {
+                val searchContent = state.content as? BrowseContent.TmdbSearchResults
+                if (searchContent != null && searchContent.query.equals(q, ignoreCase = true)) {
+                    if (searchContent.shows.isNotEmpty()) {
+                        TmdbSearchResultsContent(
+                            content = searchContent,
+                            favorites = favorites,
+                            viewModel = viewModel,
+                            filter = "shows",
+                            isLoading = state.isSearchLoading
+                        )
+                    } else if (state.isSearchLoading) {
+                        LoadingView()
+                    } else {
+                        EmptyHint("No shows found")
+                    }
                 } else if (state.isSearchLoading) {
                     LoadingView()
                 } else {
-                    EmptyHint("No shows found")
+                    EmptyHint("Type at least 2 characters")
                 }
-            } else if (state.isSearchLoading) {
-                LoadingView()
-            } else {
-                EmptyHint("Type at least 2 characters")
             }
         }
         else -> when (val content = state.content) {
@@ -671,9 +709,24 @@ fun ErrorView(message: String, onDismiss: () -> Unit, onReload: () -> Unit) {
 }
 
 @Composable
-fun PlaybackPrepOverlay(prep: com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep, onCancel: () -> Unit) {
+fun PlaybackPrepOverlay(
+    prep: com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+) {
     val cancelFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { cancelFocus.requestFocus() }
+    val retryFocus = remember { FocusRequester() }
+
+    val isFailed = prep.stage == com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep.Stage.FAILED
+
+    LaunchedEffect(isFailed) {
+        if (isFailed) {
+            kotlinx.coroutines.delay(100)
+            retryFocus.requestFocus()
+        } else {
+            cancelFocus.requestFocus()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -689,11 +742,16 @@ fun PlaybackPrepOverlay(prep: com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep, on
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(48.dp),
-                color = AccentBlue,
-                strokeWidth = 3.dp
-            )
+            if (isFailed) {
+                // Failure icon
+                Text("✕", fontSize = 36.sp, color = RedColor)
+            } else {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(48.dp),
+                    color = AccentBlue,
+                    strokeWidth = 3.dp
+                )
+            }
             Spacer(Modifier.height(20.dp))
             Text(
                 prep.title,
@@ -729,19 +787,52 @@ fun PlaybackPrepOverlay(prep: com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep, on
                 fontSize = 11.sp
             )
             Spacer(Modifier.height(24.dp))
-            var cancelFocused by remember { mutableStateOf(false) }
-            Text(
-                "Cancel",
-                color = if (cancelFocused) AccentBlue else TextMuted,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .focusRequester(cancelFocus)
-                    .onFocusChanged { cancelFocused = it.isFocused }
-                    .focusable()
-                    .clickable(onClick = onCancel)
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
-            )
+
+            if (isFailed) {
+                // Retry + Cancel row
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    var retryFocused by remember { mutableStateOf(false) }
+                    Text(
+                        "Retry",
+                        color = if (retryFocused) GreenSeeders else TextMuted,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .focusRequester(retryFocus)
+                            .onFocusChanged { retryFocused = it.isFocused }
+                            .focusable()
+                            .clickable(onClick = onRetry)
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                    )
+                    var cancelFocused by remember { mutableStateOf(false) }
+                    Text(
+                        "Cancel",
+                        color = if (cancelFocused) AccentBlue else TextMuted,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .focusRequester(cancelFocus)
+                            .onFocusChanged { cancelFocused = it.isFocused }
+                            .focusable()
+                            .clickable(onClick = onCancel)
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                    )
+                }
+            } else {
+                var cancelFocused by remember { mutableStateOf(false) }
+                Text(
+                    "Cancel",
+                    color = if (cancelFocused) AccentBlue else TextMuted,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .focusRequester(cancelFocus)
+                        .onFocusChanged { cancelFocused = it.isFocused }
+                        .focusable()
+                        .clickable(onClick = onCancel)
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+            }
         }
     }
 }

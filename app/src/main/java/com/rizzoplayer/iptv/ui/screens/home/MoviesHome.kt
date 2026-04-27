@@ -334,7 +334,7 @@ fun TmdbPosterCard(
         label = "cardScale"
     )
 
-    Box(modifier = modifier.fillMaxWidth()) {
+    Box(modifier = modifier) {
         Card(
             modifier = Modifier
                 .width(cardWidth)
@@ -426,7 +426,7 @@ fun TmdbPosterCard(
                     overview,
                     fontSize = 10.sp,
                     color = TextPrimary.copy(alpha = 0.85f),
-                    maxLines = 3,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(8.dp)
                 )
