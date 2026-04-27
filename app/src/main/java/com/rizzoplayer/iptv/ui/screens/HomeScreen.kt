@@ -333,7 +333,7 @@ private fun MoviesContent(
         )
         q.isNotEmpty() -> {
             val searchContent = state.content as? BrowseContent.TmdbSearchResults
-            if (searchContent != null && searchContent.query == q) {
+            if (searchContent != null && searchContent.query.equals(q, ignoreCase = true)) {
                 if (searchContent.movies.isNotEmpty()) {
                     TmdbSearchResultsContent(
                         content = searchContent,
@@ -423,7 +423,7 @@ private fun ShowsContent(
         )
         q.isNotEmpty() -> {
             val searchContent = state.content as? BrowseContent.TmdbSearchResults
-            if (searchContent != null && searchContent.query == q) {
+            if (searchContent != null && searchContent.query.equals(q, ignoreCase = true)) {
                 if (searchContent.shows.isNotEmpty()) {
                     TmdbSearchResultsContent(
                         content = searchContent,
