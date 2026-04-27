@@ -46,6 +46,17 @@ sealed class BrowseContent {
     data class TmdbShowDetail(val show: TmdbShow, val seasons: List<TmdbSeason>) : BrowseContent()
     data class TmdbMovieDetail(val movie: TmdbMovie) : BrowseContent()
     data class TmdbSearchResults(val movies: List<TmdbMovie>, val shows: List<TmdbShow>, val query: String) : BrowseContent()
+    data class StreamPicker(
+        val title: String,
+        val streams: List<UnifiedTorrent>,
+        val selectedIndex: Int,
+        val loadingIndex: Int?,
+        val errorIndex: Int?,
+        val errorMessage: String?,
+        val imdbId: String,
+        val tmdbId: String,
+        val contentId: String,
+    ) : BrowseContent()
 }
 
 @Immutable
@@ -75,6 +86,19 @@ data class TmdbStreamSelectionState(
     val contentId: String
 )
 
+@Immutable
+data class StreamPickerState(
+    val title: String,
+    val streams: List<UnifiedTorrent>,
+    val selectedIndex: Int,
+    val loadingIndex: Int?,
+    val errorIndex: Int?,
+    val errorMessage: String?,
+    val imdbId: String,
+    val tmdbId: String,
+    val contentId: String,
+)
+
 @Stable
 data class MainUiState(
     val section: Section = Section.LIVE,
@@ -93,6 +117,7 @@ data class MainUiState(
     val isGridLoading: Boolean = false,
     val isSearchLoading: Boolean = false,
     val tmdbStreamSelection: TmdbStreamSelectionState? = null,
+    val streamPicker: StreamPickerState? = null,
     val playbackPrep: PlaybackPrep? = null,
     val lastPlaybackSelection: TmdbStreamSelectionState? = null,
     val lastPlaybackStreamIndex: Int = 0,
@@ -823,18 +848,158 @@ class MainViewModel(
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        tmdbStreamSelection = TmdbStreamSelectionState(
-                            streams = streams,
+                        content = BrowseContent.StreamPicker(
                             title = title,
+                            streams = streams,
+                            selectedIndex = 0,
+                            loadingIndex = null,
+                            errorIndex = null,
+                            errorMessage = null,
                             imdbId = imdbId,
                             tmdbId = detail.id.toString(),
-                            contentId = detail.id.toString()
-                        )
+                            contentId = detail.id.toString(),
+                        ),
+                        canGoBack = true,
                     )
                 }
             } catch (e: Exception) {
                 _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to play movie") }
             }
+        }
+    }
+
+    fun selectStreamInPicker(stream: UnifiedTorrent, index: Int) {
+        val picker = _state.value.content as? BrowseContent.StreamPicker ?: return
+        // Update state to show loading on this row
+        _state.update {
+            it.copy(
+                content = picker.copy(
+                    loadingIndex = index,
+                    errorIndex = null,
+                    errorMessage = null,
+                )
+            )
+        }
+        // Now trigger playback prep
+        val selection = TmdbStreamSelectionState(
+            streams = picker.streams,
+            title = picker.title,
+            imdbId = picker.imdbId,
+            tmdbId = picker.tmdbId,
+            contentId = picker.contentId,
+        )
+        val streamIndex = picker.streams.indexOfFirst { it.url == stream.url }.coerceAtLeast(0)
+        _state.update {
+            it.copy(
+                lastPlaybackSelection = selection,
+                lastPlaybackStreamIndex = streamIndex,
+            )
+        }
+        currentFallbackHashes = picker.streams
+            .filter { it.url != stream.url }
+            .mapNotNull { it.hash }
+            .distinct()
+            .take(5)
+        currentPlaybackTitle = picker.title
+        currentContentType = "vod"
+        playbackPrepJob?.cancel()
+        playbackPrepJob = viewModelScope.launch {
+            torBoxRepository.resolveMovie(picker.imdbId).collect { resolution ->
+                when (resolution) {
+                    is StreamResolution.Searching -> {
+                        _state.update { it.copy(
+                            playbackPrep = PlaybackPrep(picker.title, PlaybackPrep.Stage.SEARCHING, "Searching torrent...")
+                        ) }
+                    }
+                    is StreamResolution.Queuing -> {
+                        _state.update { it.copy(
+                            playbackPrep = PlaybackPrep(picker.title, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")
+                        ) }
+                    }
+                    is StreamResolution.Caching -> {
+                        _state.update { it.copy(
+                            content = (it.content as? BrowseContent.StreamPicker)?.copy(loadingIndex = index)
+                                ?: it.content,
+                            playbackPrep = PlaybackPrep(picker.title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")
+                        ) }
+                    }
+                    is StreamResolution.TryingNextStream -> {
+                        val nextIdx = resolution.attempt - 1
+                        val total = resolution.total
+                        _state.update {
+                            it.copy(
+                                content = (it.content as? BrowseContent.StreamPicker)?.copy(
+                                    loadingIndex = nextIdx.coerceIn(0, picker.streams.lastIndex)
+                                ) ?: it.content,
+                                lastPlaybackStreamIndex = nextIdx,
+                                playbackPrep = PlaybackPrep(
+                                    picker.title,
+                                    PlaybackPrep.Stage.CACHING,
+                                    "Stream ${resolution.attempt}/$total unavailable, trying next..."
+                                )
+                            )
+                        }
+                    }
+                    is StreamResolution.Ready -> {
+                        _state.update {
+                            it.copy(
+                                content = BrowseContent.TmdbMovieDetail(
+                                    TmdbMovie(
+                                        id = picker.tmdbId.toIntOrNull() ?: 0,
+                                        title = picker.title,
+                                        overview = "",
+                                        posterPath = null,
+                                        backdropPath = null,
+                                        releaseDate = "",
+                                        rating = 0f,
+                                        voteCount = 0,
+                                        genreIds = emptyList(),
+                                    )
+                                ),
+                                isLoading = false,
+                                playbackPrep = null
+                            )
+                        }
+                        val recent = RecentItem(picker.contentId, picker.title, "vod", null)
+                        _state.update { it.copy(nowPlaying = recent) }
+                        repository.recentlyWatchedStore.add(recent)
+                        _playEvent.tryEmit(PlayEvent(resolution.url, picker.title, "vod", emptyList(), emptyList()))
+                    }
+                    is StreamResolution.Failed -> {
+                        _state.update {
+                            it.copy(
+                                content = (it.content as? BrowseContent.StreamPicker)?.copy(
+                                    loadingIndex = null,
+                                    errorIndex = index,
+                                    errorMessage = resolution.reason,
+                                ) ?: it.content,
+                                isLoading = false,
+                                playbackPrep = null,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun dismissStreamPicker() {
+        _state.update {
+            it.copy(
+                content = BrowseContent.TmdbMovieDetail(
+                    TmdbMovie(
+                        id = 0,
+                        title = "",
+                        overview = "",
+                        posterPath = null,
+                        backdropPath = null,
+                        releaseDate = "",
+                        rating = 0f,
+                        voteCount = 0,
+                        genreIds = emptyList(),
+                    )
+                )
+            )
         }
     }
 

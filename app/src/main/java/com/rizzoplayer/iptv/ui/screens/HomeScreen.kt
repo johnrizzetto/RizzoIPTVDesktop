@@ -246,15 +246,6 @@ fun HomeScreen(viewModel: MainViewModel) {
             }
         }
 
-        state.tmdbStreamSelection?.let { selection ->
-            PremiumStreamSelectionOverlay(
-                title = selection.title,
-                streams = selection.streams,
-                onSelect = viewModel::playSelectedTmdbStream,
-                onDismiss = viewModel::dismissTmdbStreamSelection,
-            )
-        }
-
         state.playbackPrep?.let { prep ->
             PlaybackPrepOverlay(
                 prep = prep,
@@ -418,6 +409,13 @@ private fun MoviesContent(
                         )
                     },
                     viewModel = viewModel
+                )
+            }
+            is BrowseContent.StreamPicker -> {
+                StreamPickerScreen(
+                    state = content,
+                    onSelectStream = { stream, idx -> viewModel.selectStreamInPicker(stream, idx) },
+                    onBack = viewModel::goBack,
                 )
             }
             else -> EmptyHint("Select a category")
