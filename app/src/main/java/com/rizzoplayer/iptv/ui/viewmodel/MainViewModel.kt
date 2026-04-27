@@ -17,12 +17,14 @@ import com.rizzoplayer.iptv.data.repository.IPTVRepository
 import com.rizzoplayer.iptv.data.repository.TmdbRepository
 import com.rizzoplayer.iptv.data.repository.TorBoxRepository
 import com.rizzoplayer.iptv.data.repository.StreamResolution
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -90,6 +92,7 @@ data class MainUiState(
     val restoreGridScrollIndex: Int = -1,
     val currentGridScrollPosition: Int = 0,
     val isGridLoading: Boolean = false,
+    val isSearchLoading: Boolean = false,
     val tmdbStreamSelection: TmdbStreamSelectionState? = null,
     val playbackPrep: PlaybackPrep? = null,
     val parentalLockActive: Boolean = false,
@@ -298,6 +301,7 @@ class MainViewModel(
     private val preloaded = mutableSetOf<Section>()
     private var lastLoadBlock: (suspend (Credentials) -> BrowseContent)? = null
     private var lastTmdbBlock: (suspend () -> BrowseContent)? = null
+    private var searchJob: Job? = null
     private var playbackPrepJob: Job? = null
 
     private val recentUrlCache = mutableMapOf<String, String>() // id → url
@@ -356,11 +360,37 @@ class MainViewModel(
             snapshotFlow { _state.value.searchQuery }
                 .debounce(SEARCH_DEBOUNCE_MS)
                 .distinctUntilChanged()
-                .collectLatest { query ->
-                    if (query.length < 2) return@collectLatest
-                    loadTmdb {
-                        val (movies, shows) = tmdbRepository.searchAll(query)
-                        BrowseContent.TmdbSearchResults(movies, shows, query)
+                .collect { rawQuery ->
+                    searchJob?.cancel()
+                    val query = rawQuery.trim()
+                    if (query.length < 2) {
+                        _state.update {
+                            if (it.content is BrowseContent.TmdbSearchResults)
+                                it.copy(content = BrowseContent.Empty, isSearchLoading = false)
+                            else it.copy(isSearchLoading = false)
+                        }
+                        return@collect
+                    }
+                    searchJob = launch {
+                        _state.update { it.copy(isSearchLoading = true, error = null) }
+                        try {
+                            val (movies, shows) = withContext(Dispatchers.IO) {
+                                tmdbRepository.searchAll(query)
+                            }
+                            ensureActive()
+                            _state.update {
+                                if (it.searchQuery.trim() != query) it
+                                else it.copy(
+                                    content = BrowseContent.TmdbSearchResults(movies, shows, query),
+                                    isSearchLoading = false,
+                                    canGoBack = backStack.isNotEmpty()
+                                )
+                            }
+                        } catch (_: CancellationException) {
+                            // expected on next keystroke; do nothing
+                        } catch (e: Exception) {
+                            _state.update { it.copy(isSearchLoading = false, error = e.message ?: "Search failed") }
+                        }
                     }
                 }
         }

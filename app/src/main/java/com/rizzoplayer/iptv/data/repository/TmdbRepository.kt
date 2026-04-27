@@ -5,12 +5,14 @@ import com.rizzoplayer.iptv.data.api.TmdbApiService
 import com.rizzoplayer.iptv.data.api.TorrentioService
 import com.rizzoplayer.iptv.data.local.DiskCache
 import com.rizzoplayer.iptv.data.model.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Deferred
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -36,16 +38,15 @@ class TmdbRepository(
     }
 
     private val inFlightRequests = java.util.concurrent.ConcurrentHashMap<String, Deferred<Any>>()
+    private val coalesceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Suppress("UNCHECKED_CAST")
     private suspend fun <T> coalesced(key: String, block: suspend () -> T): T {
-        return (inFlightRequests.getOrPut(key) {
-            coroutineScope {
-                async(Dispatchers.IO) {
-                    block() as Any
-                }.also { it.invokeOnCompletion { inFlightRequests.remove(key) } }
-            }
-        } as Deferred<T>).await()
+        val deferred = inFlightRequests.getOrPut(key) {
+            coalesceScope.async { block() as Any }
+                .also { it.invokeOnCompletion { inFlightRequests.remove(key) } }
+        } as Deferred<T>
+        return deferred.await()
     }
 
     private suspend inline fun <reified T> cachedList(

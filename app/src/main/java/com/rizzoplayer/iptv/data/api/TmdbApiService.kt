@@ -17,7 +17,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import java.io.IOException
 
 @OptIn(ExperimentalSerializationApi::class)
 class TmdbApiService(context: Context, private val baseUrl: String = "https://api.themoviedb.org/3") {
@@ -59,16 +58,18 @@ class TmdbApiService(context: Context, private val baseUrl: String = "https://ap
     }
 
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(url).build()
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw IOException("TMDB API error: ${response.code} ${response.message}")
+        try {
+            val request = Request.Builder().url(url).build()
+            client.newCall(request).execute().use { it.body?.string() ?: "" }
+        } catch (_: IllegalArgumentException) {
+            ""
         }
-        response.use { it.body?.string() ?: "" }
     }
 
     private fun tmdbUrl(path: String, vararg pairs: Pair<String, String>): String {
-        val params = pairs.joinToString("&") { (k, v) -> "$k=$v" }
+        val params = pairs.joinToString("&") { (k, v) ->
+            "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
+        }
         return if (params.isEmpty()) "$baseUrl$path" else "$baseUrl$path?$params"
     }
 

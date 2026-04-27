@@ -332,25 +332,18 @@ private fun MoviesContent(
             onReload = viewModel::retryReload
         )
         q.isNotEmpty() -> {
-            // If searchQuery is set but content hasn't loaded yet, show loading.
-            // Once content is TmdbSearchResults, show results; otherwise keep polling via LoadingView.
-            if (state.error != null) {
-                ErrorView(
-                    message = state.error,
-                    onDismiss = viewModel::clearError,
-                    onReload = viewModel::retryReload
-                )
-            }
-            if (state.content is BrowseContent.TmdbSearchResults) {
-                val searchContent = state.content as BrowseContent.TmdbSearchResults
+            val searchContent = state.content as? BrowseContent.TmdbSearchResults
+            if (searchContent != null && searchContent.query == q) {
                 if (searchContent.movies.isNotEmpty()) {
                     TmdbSearchResultsContent(
                         content = searchContent,
                         favorites = favorites,
                         viewModel = viewModel,
                         filter = "movies",
-                        isLoading = state.isGridLoading
+                        isLoading = state.isSearchLoading
                     )
+                } else if (state.isSearchLoading) {
+                    LoadingView()
                 } else {
                     EmptyHint("No movies found")
                 }
@@ -429,23 +422,18 @@ private fun ShowsContent(
             onReload = viewModel::retryReload
         )
         q.isNotEmpty() -> {
-            if (state.error != null) {
-                ErrorView(
-                    message = state.error,
-                    onDismiss = viewModel::clearError,
-                    onReload = viewModel::retryReload
-                )
-            }
-            if (state.content is BrowseContent.TmdbSearchResults) {
-                val searchContent = state.content as BrowseContent.TmdbSearchResults
+            val searchContent = state.content as? BrowseContent.TmdbSearchResults
+            if (searchContent != null && searchContent.query == q) {
                 if (searchContent.shows.isNotEmpty()) {
                     TmdbSearchResultsContent(
                         content = searchContent,
                         favorites = favorites,
                         viewModel = viewModel,
                         filter = "shows",
-                        isLoading = state.isGridLoading
+                        isLoading = state.isSearchLoading
                     )
+                } else if (state.isSearchLoading) {
+                    LoadingView()
                 } else {
                     EmptyHint("No shows found")
                 }
