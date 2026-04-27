@@ -644,15 +644,17 @@ class MainViewModel(
     }
 
     fun selectTmdbMovie(movie: TmdbMovie) {
-        android.util.Log.d("NAV_DEBUG", "selectTmdbMovie CALLED: movie=${movie.title}, content=${_state.value.content::class.simpleName}, canGoBack=${_state.value.canGoBack}")
         backStack.addLast(_state.value.content to 0)
         _state.update { it.copy(content = BrowseContent.TmdbMovieDetail(movie), canGoBack = true) }
-        android.util.Log.d("NAV_DEBUG", "selectTmdbMovie AFTER: content=${_state.value.content::class.simpleName}, canGoBack=${_state.value.canGoBack}, searchQuery='${_state.value.searchQuery}'")
     }
 
     fun goBack() {
-        android.util.Log.d("NAV_DEBUG", "goBack CALLED: backStack.size=${backStack.size}, content=${_state.value.content::class.simpleName}, searchQuery='${_state.value.searchQuery}'")
-        if (backStack.isEmpty()) { selectSection(_state.value.section); return }
+        if (backStack.isEmpty()) {
+            // Already at root — clear canGoBack flag without reloading content.
+            // This prevents the "back on error → home" navigation jump.
+            _state.update { it.copy(canGoBack = false) }
+            return
+        }
         val (savedContent, scrollPos) = backStack.removeLast()
         val isGrid = savedContent is BrowseContent.TmdbMovies || savedContent is BrowseContent.TmdbShows
         _state.update {
@@ -1284,7 +1286,9 @@ class MainViewModel(
                 val content = withContext(Dispatchers.IO) { block(creds) }
                 _state.update { it.copy(isLoading = false, content = content, canGoBack = backStack.isNotEmpty()) }
             } catch (e: Exception) {
-                _state.update { it.copy(isLoading = false, error = e.message ?: "Unknown error") }
+                // Error stays inline — user retries or goes back from current screen.
+                // Only set canGoBack=true if we have somewhere to go back to.
+                _state.update { it.copy(isLoading = false, canGoBack = backStack.isNotEmpty(), error = e.message ?: "Unknown error") }
             }
         }
     }
@@ -1297,7 +1301,9 @@ class MainViewModel(
                 val content = withContext(Dispatchers.IO) { block() }
                 _state.update { it.copy(isLoading = false, isGridLoading = false, content = content, canGoBack = backStack.isNotEmpty()) }
             } catch (e: Exception) {
-                _state.update { it.copy(isLoading = false, isGridLoading = false, error = e.message ?: "Unknown error") }
+                // Error stays inline — user retries or goes back from current screen.
+                // Only set canGoBack=true if we have somewhere to go back to.
+                _state.update { it.copy(isLoading = false, isGridLoading = false, canGoBack = backStack.isNotEmpty(), error = e.message ?: "Unknown error") }
             }
         }
     }
