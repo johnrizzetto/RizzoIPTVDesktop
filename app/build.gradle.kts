@@ -50,6 +50,12 @@ android {
             versionName = "4.0.0-alpha.1"
             versionCode = 4
         }
+        create("v5") {
+            dimension = "version"
+            applicationIdSuffix = ".v5"
+            versionName = "5.0.0"
+            versionCode = 500
+        }
     }
 
     signingConfigs {

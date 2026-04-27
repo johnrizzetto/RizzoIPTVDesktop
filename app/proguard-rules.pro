@@ -1,3 +1,12 @@
+# Kotlinx Serialization
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
+-keepclasseswithmembers class kotlinx.serialization.json.** { kotlinx.serialization.KSerializer serializer(...); }
+-keep,includedescriptorclasses class com.rizzoplayer.iptv.**$$serializer { *; }
+-keepclassmembers class com.rizzoplayer.iptv.** { *** Companion; }
+-keepclasseswithmembers class com.rizzoplayer.iptv.** { kotlinx.serialization.KSerializer serializer(...); }
+
 # Gson
 -keep class com.rizzoplayer.iptv.data.model.** { *; }
 -keepattributes Signature

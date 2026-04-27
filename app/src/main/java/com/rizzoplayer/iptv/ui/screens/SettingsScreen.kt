@@ -101,8 +101,8 @@ fun SettingsScreen(
             }
 
             item { Spacer(Modifier.height(16.dp)); SettingsSectionHeader("About") }
-            item { SettingsInfoRow("Version", "1.0.0", isFocused = focusedItem == "version", onClick = {}, onFocus = { focusedItem = "version" }) }
-            item { SettingsInfoRow("Build", "Release", isFocused = focusedItem == "build", onClick = {}, onFocus = { focusedItem = "build" }) }
+            item { SettingsInfoRow("Version", "5.0.0", isFocused = focusedItem == "version", onClick = {}, onFocus = { focusedItem = "version" }) }
+            item { SettingsInfoRow("Build", "v5", isFocused = focusedItem == "build", onClick = {}, onFocus = { focusedItem = "build" }) }
 
             item { Spacer(Modifier.height(24.dp)) }
             item {
