@@ -12,7 +12,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
@@ -283,9 +282,7 @@ class TmdbRepository(
             val moviesDeferred = async { searchMovies(query) }
             val showsDeferred = async { searchShows(query) }
             try {
-                withTimeout(15_000L) {
-                    moviesDeferred.await() to showsDeferred.await()
-                }
+                moviesDeferred.await() to showsDeferred.await()
             } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
                 moviesDeferred.cancel()
                 showsDeferred.cancel()

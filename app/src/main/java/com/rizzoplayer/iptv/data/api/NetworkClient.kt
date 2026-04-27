@@ -41,6 +41,7 @@ object NetworkClient {
             cache(Cache(File(cacheDir, "okhttp_shared_cache"), CACHE_SIZE))
             connectTimeout(15, TimeUnit.SECONDS)
             readTimeout(20, TimeUnit.SECONDS)
+            callTimeout(20, TimeUnit.SECONDS)
             protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
             connectionPool(ConnectionPool(16, 2, TimeUnit.MINUTES))
             dispatcher(Dispatcher().apply {

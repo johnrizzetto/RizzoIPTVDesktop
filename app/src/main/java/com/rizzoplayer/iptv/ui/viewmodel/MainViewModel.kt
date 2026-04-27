@@ -386,18 +386,13 @@ class MainViewModel(
                             // previous job was stuck and this one is still running.
                             _state.update { it.copy(isSearchLoading = true, error = null) }
                             try {
-                                val result = withContext(Dispatchers.IO) {
-                                    kotlinx.coroutines.withTimeout(18_000L) {
-                                        tmdbRepository.searchAll(query)
-                                    }
-                                }
-                                val (movies, shows) = result
+                                val result = tmdbRepository.searchAll(query)
                                 ensureActive()
                                 // Only update content if the query hasn't changed since we started
                                 _state.update {
                                     if (it.searchQuery.trim() != query) it
                                     else it.copy(
-                                        content = BrowseContent.TmdbSearchResults(movies, shows, query),
+                                        content = BrowseContent.TmdbSearchResults(result.first, result.second, query),
                                         isSearchLoading = false,
                                         canGoBack = backStack.isNotEmpty()
                                     )
