@@ -141,35 +141,39 @@ fun TmdbSearchResultsContent(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
         )
 
-        if (isLoading) {
-            if (filter != "shows") {
-                Column {
-                    Text(
-                        "Movies",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextMuted,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                    )
-                    RizzoSkeletonRow(count = 6, posterRatio = 0.667f)
-                }
-            }
-            if (filter != "movies") {
-                Column {
-                    Text(
-                        "TV Shows",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextMuted,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                    )
-                    RizzoSkeletonRow(count = 6, posterRatio = 0.667f)
-                }
+    // Show results immediately when available; only show skeleton on first load (nothing yet)
+    val hasResults = (filter != "shows" && content.movies.isNotEmpty()) ||
+                     (filter != "movies" && content.shows.isNotEmpty())
+
+    if (isLoading && !hasResults) {
+        if (filter != "shows") {
+            Column {
+                Text(
+                    "Movies",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextMuted,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
+                RizzoSkeletonRow(count = 6, posterRatio = 0.667f)
             }
         }
+        if (filter != "movies") {
+            Column {
+                Text(
+                    "TV Shows",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextMuted,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
+                RizzoSkeletonRow(count = 6, posterRatio = 0.667f)
+            }
+        }
+    }
 
-        if (showMovies) {
-            SearchMovieRow(
+    if (showMovies) {
+        SearchMovieRow(
                 movies = content.movies,
                 favorites = favorites,
                 onSelect = viewModel::selectTmdbMovie,
