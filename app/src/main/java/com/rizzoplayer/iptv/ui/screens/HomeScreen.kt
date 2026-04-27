@@ -162,17 +162,10 @@ fun HomeScreen(viewModel: MainViewModel) {
                 downTarget = contentFocusRestorer
             )
 
-            // EPG — minimal one-liner for live TV
+            // EPG — expanded strip for live TV
             state.epgInfo?.let { epg ->
-                if (epg.nowTitle.isNotEmpty()) {
-                    Text(
-                        "  ▶ ${epg.nowTitle}",
-                        fontSize = 11.sp,
-                        color = AccentBlue,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
+                if (epg.nowTitle.isNotEmpty() || epg.nextTitle.isNotEmpty()) {
+                    EpgStrip(epg = epg)
                 }
             }
 
@@ -296,6 +289,7 @@ private fun LiveContent(
                 }
                 LiveStreamsContent(
                     items = filtered,
+                    categoryName = content.categoryName,
                     favorites = favorites,
                     onPlay = viewModel::onPlayLive,
                     onFavToggle = { s -> viewModel.toggleFavorite(s.id.toString(), s.name, "live", icon = s.icon) }
@@ -627,6 +621,7 @@ private fun LiveCategoriesContent(
 @Composable
 private fun LiveStreamsContent(
     items: List<LiveStream>,
+    categoryName: String,
     favorites: Map<String, Favorite>,
     onPlay: (LiveStream) -> Unit,
     onFavToggle: (LiveStream) -> Unit
@@ -644,6 +639,24 @@ private fun LiveStreamsContent(
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
+        // Category header
+        if (categoryName.isNotEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Text(
+                        text = categoryName,
+                        fontSize = 12.sp,
+                        color = AccentBlue,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
         items(items, key = { it.id }, contentType = { "LiveStream" }) { stream ->
             val isFav = favorites.containsKey(stream.id.toString())
             val isFirst = items.firstOrNull()?.id == stream.id

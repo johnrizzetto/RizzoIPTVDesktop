@@ -13,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,6 +25,80 @@ import com.rizzoplayer.iptv.ui.theme.NavFocusBg
 import com.rizzoplayer.iptv.ui.theme.RedColor
 import com.rizzoplayer.iptv.ui.theme.TextMuted
 import com.rizzoplayer.iptv.ui.theme.TextPrimary
+import com.rizzoplayer.iptv.ui.viewmodel.EpgInfo
+
+@Composable
+fun EpgStrip(
+    epg: EpgInfo,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+    ) {
+        // NOW: current program with progress
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                "NOW:",
+                fontSize = 11.sp,
+                color = TextMuted,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.width(36.dp)
+            )
+            Text(
+                epg.nowTitle.ifEmpty { "—" },
+                fontSize = 12.sp,
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            epg.nowStart.takeIf { it.isNotEmpty() }?.let {
+                Text(
+                    it,
+                    fontSize = 10.sp,
+                    color = AccentBlue,
+                    modifier = Modifier.padding(start = 6.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        // NEXT: next program
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                "NEXT:",
+                fontSize = 11.sp,
+                color = TextMuted,
+                modifier = Modifier.width(36.dp)
+            )
+            Text(
+                epg.nextTitle.ifEmpty { "—" },
+                fontSize = 11.sp,
+                color = TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            epg.nextStart.takeIf { it.isNotEmpty() }?.let {
+                Text(
+                    it,
+                    fontSize = 10.sp,
+                    color = TextMuted.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(start = 6.dp)
+                )
+            }
+        }
+    }
+}
 
 @Composable
 fun ChannelRow(

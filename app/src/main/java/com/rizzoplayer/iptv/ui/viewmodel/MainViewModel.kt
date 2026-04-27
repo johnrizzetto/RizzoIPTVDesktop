@@ -36,7 +36,7 @@ enum class Section { LIVE, VOD, SERIES, FAVORITES }
 sealed class BrowseContent {
     object Empty : BrowseContent()
     data class Categories(val items: List<Category>, val mode: Section) : BrowseContent()
-    data class LiveStreams(val items: List<LiveStream>) : BrowseContent()
+    data class LiveStreams(val items: List<LiveStream>, val categoryName: String = "") : BrowseContent()
     data class VodStreams(val items: List<VodStream>) : BrowseContent()
     data class SeriesList(val items: List<Series>) : BrowseContent()
     data class Episodes(val seasons: Map<String, List<Episode>>) : BrowseContent()
@@ -122,6 +122,8 @@ data class MainUiState(
     val lastPlaybackSelection: TmdbStreamSelectionState? = null,
     val lastPlaybackStreamIndex: Int = 0,
     val parentalLockActive: Boolean = false,
+    val lastLiveChannel: LiveStream? = null,
+    val previousLiveChannel: LiveStream? = null,
 )
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -597,7 +599,7 @@ class MainViewModel(
         backStack.addLast(_state.value.content to currentPos)
         if (mode == Section.LIVE) {
             load { creds ->
-                BrowseContent.LiveStreams(repository.getLiveStreams(creds, category.id))
+                BrowseContent.LiveStreams(repository.getLiveStreams(creds, category.id), category.name)
             }
         } else {
             val genreId = category.id.toIntOrNull() ?: return
@@ -809,7 +811,13 @@ class MainViewModel(
         val creds = _state.value.credentials ?: return
         val url = repository.getLiveUrl(creds, stream.id)
         val recent = RecentItem(stream.id.toString(), stream.name, "live", stream.icon)
-        _state.update { it.copy(nowPlaying = recent) }
+        _state.update {
+            it.copy(
+                nowPlaying = recent,
+                previousLiveChannel = it.lastLiveChannel,
+                lastLiveChannel = stream
+            )
+        }
         loadEpg(stream.id, stream.name)
         viewModelScope.launch {
             repository.recentlyWatchedStore.add(recent)
@@ -817,6 +825,12 @@ class MainViewModel(
             val favRefs = buildFavoriteRefsFromCache(excludeId = stream.id.toString())
             _playEvent.tryEmit(PlayEvent(url, stream.name, "live", recentRefs, favRefs))
         }
+    }
+
+    fun toggleLastChannel() {
+        val current = _state.value.lastLiveChannel ?: return
+        val previous = _state.value.previousLiveChannel ?: return
+        onPlayLive(previous)
     }
 
     fun onPlayTmdbMovie(movie: TmdbMovie) {
