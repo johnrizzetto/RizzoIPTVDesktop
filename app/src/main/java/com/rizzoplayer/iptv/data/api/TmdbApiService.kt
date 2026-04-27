@@ -60,8 +60,17 @@ class TmdbApiService(context: Context, private val baseUrl: String = "https://ap
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder().url(url).build()
-            client.newCall(request).execute().use { it.body?.string() ?: "" }
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use ""
+                response.body?.string() ?: ""
+            }
         } catch (_: IllegalArgumentException) {
+            ""
+        } catch (_: java.net.SocketTimeoutException) {
+            ""
+        } catch (_: java.net.UnknownHostException) {
+            ""
+        } catch (e: Exception) {
             ""
         }
     }

@@ -371,12 +371,15 @@ class MainViewModel(
                         }
                         return@collect
                     }
-                    searchJob = launch {
+                    searchJob = viewModelScope.launch {
                         _state.update { it.copy(isSearchLoading = true, error = null) }
                         try {
-                            val (movies, shows) = withContext(Dispatchers.IO) {
-                                tmdbRepository.searchAll(query)
+                            val result = withContext(Dispatchers.IO) {
+                                kotlinx.coroutines.withTimeout(18_000L) {
+                                    tmdbRepository.searchAll(query)
+                                }
                             }
+                            val (movies, shows) = result
                             ensureActive()
                             _state.update {
                                 if (it.searchQuery.trim() != query) it
@@ -388,6 +391,8 @@ class MainViewModel(
                             }
                         } catch (_: CancellationException) {
                             // expected on next keystroke; do nothing
+                        } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+                            _state.update { it.copy(isSearchLoading = false, error = "Search timed out") }
                         } catch (e: Exception) {
                             _state.update { it.copy(isSearchLoading = false, error = e.message ?: "Search failed") }
                         }
