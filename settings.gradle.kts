@@ -14,6 +14,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "RizzoIPTVPlayer"
+rootProject.name = "RizzoPlayer"
 include(":app")
 include(":baselineprofile")

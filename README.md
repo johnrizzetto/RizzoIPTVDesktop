@@ -1,4 +1,4 @@
-# Rizzo IPTV Player — Android / Google TV
+# Rizzo Player — Android / Google TV
 
 A clean, open-source IPTV player for Google TV and Android TV built with Kotlin + Jetpack Compose.
 Supports any **Xtream Codes**-compatible IPTV service.

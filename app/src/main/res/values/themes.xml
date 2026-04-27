@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.RizzoIPTVPlayer" parent="android:Theme.DeviceDefault.NoActionBar">
+    <style name="Theme.RizzoPlayer" parent="android:Theme.DeviceDefault.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:colorPrimary">#2563EB</item>
     </style>
 
-    <style name="Theme.RizzoIPTVPlayer.Player" parent="android:Theme.Black.NoTitleBar.Fullscreen">
+    <style name="Theme.RizzoPlayer.Player" parent="android:Theme.Black.NoTitleBar.Fullscreen">
         <item name="android:keepScreenOn">true</item>
     </style>
 </resources>
