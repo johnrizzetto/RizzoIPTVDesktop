@@ -31,13 +31,13 @@ class RizzoApp : Application() {
             ImageLoader.Builder(this)
                 .memoryCache {
                     MemoryCache.Builder(this)
-                        .maxSizePercent(0.15)
+                        .maxSizePercent(0.14)  // ~50MB on 350MB TV heap
                         .build()
                 }
                 .diskCache {
                     DiskCache.Builder()
                         .directory(cacheDir.resolve("image_cache"))
-                        .maxSizeBytes(100L * 1024 * 1024)
+                        .maxSizeBytes(200L * 1024 * 1024)  // 200MB disk cache
                         .build()
                 }
                 .memoryCachePolicy(CachePolicy.ENABLED)
