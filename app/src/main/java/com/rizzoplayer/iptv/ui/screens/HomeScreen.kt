@@ -347,8 +347,10 @@ private fun MoviesContent(
                 } else {
                     EmptyHint("No movies found")
                 }
-            } else {
+            } else if (state.isSearchLoading) {
                 LoadingView()
+            } else {
+                EmptyHint("Type at least 2 characters")
             }
         }
         else -> when (val content = state.content) {
@@ -437,8 +439,10 @@ private fun ShowsContent(
                 } else {
                     EmptyHint("No shows found")
                 }
-            } else {
+            } else if (state.isSearchLoading) {
                 LoadingView()
+            } else {
+                EmptyHint("Type at least 2 characters")
             }
         }
         else -> when (val content = state.content) {

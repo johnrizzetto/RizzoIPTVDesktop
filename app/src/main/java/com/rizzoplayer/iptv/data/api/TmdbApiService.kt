@@ -71,6 +71,7 @@ class TmdbApiService(context: Context, private val baseUrl: String = "https://ap
         } catch (_: java.net.UnknownHostException) {
             ""
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             ""
         }
     }

@@ -392,10 +392,10 @@ class MainViewModel(
                                     canGoBack = backStack.isNotEmpty()
                                 )
                             }
-                        } catch (_: CancellationException) {
-                            // expected on next keystroke; do nothing
                         } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
                             _state.update { it.copy(isSearchLoading = false, error = "Search timed out") }
+                        } catch (_: CancellationException) {
+                            // expected on next keystroke; do nothing
                         } catch (e: Exception) {
                             _state.update { it.copy(isSearchLoading = false, error = e.message ?: "Search failed") }
                         }
