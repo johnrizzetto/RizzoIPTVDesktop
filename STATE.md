@@ -38,11 +38,17 @@
 - **Bug 5:** Match `searchContent.query == q` before showing results in `MoviesContent` and `ShowsContent` — prevents stale results flash on fast type/erase
 - Commit: `fa6fefb`
 
-### Verification
+### Search Fix Round 5 — Applied 2026-04-27 (root cause fixes)
+- **Bug 1 (HIGH):** `TmdbApiService.get()` catch-all `catch (e: Exception)` re-throws `CancellationException` instead of swallowing it. Prevents cancelled coroutines from racing to update state with stale results. Commit: `09b3df1`
+- **Bug 2 (HIGH):** `MainViewModel` searchJob catch block reordered — `TimeoutCancellationException` now before `CancellationException`. Previously unreachable (subclass), leaving `isSearchLoading` stuck permanently on timeout. Commit: `09b3df1`
+- **Bug 3 (MEDIUM):** `HomeScreen` Movies and Shows search branches now gate `LoadingView()` on `state.isSearchLoading`. Previously unconditional `else { LoadingView() }` left permanent spinner on 1-char queries and any state-update gap. Commit: `09b3df1`
+
+## Verification
 - `./gradlew assembleV4Debug` → BUILD SUCCESSFUL
 - `./gradlew ktlintCheck` → BUILD SUCCESSFUL
 - `./gradlew test` → 170 tasks, all pass
 - APK: `app/build/outputs/apk/v4/debug/app-v4-debug.apk`
+- Commit `09b3df1` pushed to `origin/v4-polish`
 
 ## TMDB Keys
 - `TMDB_BEARER` present in local.properties
