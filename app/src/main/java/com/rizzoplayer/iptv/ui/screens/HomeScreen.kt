@@ -235,6 +235,17 @@ fun HomeScreen(viewModel: MainViewModel) {
             }
         }
 
+        state.tmdbStreamSelection?.let { selection ->
+            PremiumStreamSelectionOverlay(
+                title = selection.title,
+                streams = selection.streams,
+                failedStreamUrl = selection.failedStreamUrl,
+                failedReason = selection.failedReason,
+                onSelect = { stream -> viewModel.playSelectedTmdbStreamCommon(stream, selection.contentType) },
+                onDismiss = viewModel::dismissTmdbStreamSelection,
+            )
+        }
+
         state.playbackPrep?.let { prep ->
             PlaybackPrepOverlay(
                 prep = prep,
@@ -828,19 +839,22 @@ fun PlaybackPrepOverlay(
                     )
                 }
             } else {
-                var cancelFocused by remember { mutableStateOf(false) }
-                Text(
-                    "Cancel",
-                    color = if (cancelFocused) AccentBlue else TextMuted,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .focusRequester(cancelFocus)
-                        .onFocusChanged { cancelFocused = it.isFocused }
-                        .focusable()
-                        .clickable(onClick = onCancel)
-                        .padding(horizontal = 20.dp, vertical = 8.dp)
-                )
+                // Cancel button only appears after the 5s grace period (canCancel = true)
+                if (prep.canCancel) {
+                    var cancelFocused by remember { mutableStateOf(false) }
+                    Text(
+                        "Cancel",
+                        color = if (cancelFocused) AccentBlue else TextMuted,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .focusRequester(cancelFocus)
+                            .onFocusChanged { cancelFocused = it.isFocused }
+                            .focusable()
+                            .clickable(onClick = onCancel)
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                    )
+                }
             }
         }
     }

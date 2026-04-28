@@ -21,6 +21,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.ensureActive
@@ -72,7 +73,8 @@ data class EpgInfo(
 data class PlaybackPrep(
     val title: String,
     val stage: Stage,
-    val message: String
+    val message: String,
+    val canCancel: Boolean = false
 ) {
     enum class Stage { SEARCHING, QUEUING, CACHING, READY, FAILED }
 }
@@ -83,7 +85,12 @@ data class TmdbStreamSelectionState(
     val title: String,
     val imdbId: String,
     val tmdbId: String,
-    val contentId: String
+    val contentId: String,
+    val contentType: String, // "movie" or "episode"
+    val show: TmdbShow? = null,
+    val episode: TmdbEpisode? = null,
+    val failedStreamUrl: String? = null,   // url of stream that failed prep, so overlay can mark it
+    val failedReason: String? = null,       // truncated error message shown under the failed row
 )
 
 @Immutable
@@ -805,6 +812,77 @@ class MainViewModel(
             }
     }
 
+    private suspend fun handleStreamResolution(resolution: StreamResolution, title: String, contentType: String, selectedStream: UnifiedTorrent? = null) {
+        try {
+        val selection = _state.value.tmdbStreamSelection
+        val contentId = selection?.contentId
+        when (resolution) {
+            is StreamResolution.Searching -> {
+                _state.update { it.copy(isLoading = true, playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.SEARCHING, "Searching torrent...")) }
+            }
+            is StreamResolution.Queuing -> {
+                _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")) }
+            }
+            is StreamResolution.Caching -> {
+                _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
+            }
+            is StreamResolution.TryingNextStream -> {
+                val nextIdx = resolution.attempt - 1
+                val total = resolution.total
+                _state.update {
+                    it.copy(
+                        lastPlaybackStreamIndex = nextIdx,
+                        playbackPrep = PlaybackPrep(
+                            title,
+                            PlaybackPrep.Stage.CACHING,
+                            "Stream ${resolution.attempt}/$total unavailable, trying next..."
+                        )
+                    )
+                }
+            }
+            is StreamResolution.Ready -> {
+                _state.update { it.copy(isLoading = false, playbackPrep = null, tmdbStreamSelection = null) }
+                if (contentType == "episode" && contentId != null) {
+                    val recent = RecentItem(contentId, title, "vod", null)
+                    _state.update { it.copy(nowPlaying = recent) }
+                    repository.recentlyWatchedStore.add(recent)
+                    val stableId = contentId
+                    _playEvent.tryEmit(PlayEvent(resolution.url, title, "vod", emptyList(), emptyList()))
+                } else if (contentType == "vod") {
+                    val recent = RecentItem(contentId ?: "", title, "vod", null)
+                    _state.update { it.copy(nowPlaying = recent) }
+                    repository.recentlyWatchedStore.add(recent)
+                    _playEvent.tryEmit(PlayEvent(resolution.url, title, "vod", emptyList(), emptyList()))
+                } else {
+                    _playEvent.tryEmit(PlayEvent(resolution.url, title, contentType, emptyList(), emptyList()))
+                }
+            }
+            is StreamResolution.Failed -> {
+                // Reopen the picker with the failed stream marked inline.
+                // selectedStream is captured in the collect closure (non-null when called from playSelectedTmdbStream).
+                val failedUrl = selectedStream?.url
+                val reason = resolution.reason
+                val streams = selection?.streams ?: _state.value.lastPlaybackSelection?.streams ?: emptyList()
+                val s = selection ?: _state.value.lastPlaybackSelection
+                if (streams.isNotEmpty() && s != null) {
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            playbackPrep = null,
+                            tmdbStreamSelection = s.copy(failedStreamUrl = failedUrl, failedReason = reason),
+                        )
+                    }
+                } else {
+                    // No picker to reopen — fall back to global error
+                    _state.update { it.copy(isLoading = false, playbackPrep = null, error = reason) }
+                }
+            }
+        }
+        } catch (e: CancellationException) {
+            throw e
+        }
+    }
+
     fun onPlayLive(stream: LiveStream) {
         currentFallbackHashes = emptyList()
         currentPlaybackTitle = ""
@@ -874,6 +952,7 @@ class MainViewModel(
                             contentId = detail.id.toString(),
                         ),
                         canGoBack = true,
+
                     )
                 }
             } catch (e: Exception) {
@@ -901,6 +980,7 @@ class MainViewModel(
             imdbId = picker.imdbId,
             tmdbId = picker.tmdbId,
             contentId = picker.contentId,
+            contentType = "vod",
         )
         val streamIndex = picker.streams.indexOfFirst { it.url == stream.url }.coerceAtLeast(0)
         _state.update {
@@ -1020,9 +1100,9 @@ class MainViewModel(
     fun playSelectedTmdbStream(stream: UnifiedTorrent) {
         val selection = _state.value.tmdbStreamSelection ?: return
         val streamIndex = selection.streams.indexOfFirst { it.url == stream.url }.coerceAtLeast(0)
+        // Keep picker alive — clear failed state from any previous attempt
         _state.update {
             it.copy(
-                tmdbStreamSelection = null,
                 lastPlaybackSelection = selection,
                 lastPlaybackStreamIndex = streamIndex,
             )
@@ -1036,42 +1116,10 @@ class MainViewModel(
         currentContentType = "vod"
         playbackPrepJob?.cancel()
         playbackPrepJob = viewModelScope.launch {
+            // Start cancel-button timer concurrently — reveal after 5s
+            launch { delay(5_000); _state.update { it.copy(playbackPrep = it.playbackPrep?.copy(canCancel = true)) } }
             torBoxRepository.resolveSelectedTorrent(stream, currentFallbackHashes).collect { resolution ->
-                when (resolution) {
-                    is StreamResolution.Searching -> {
-                        _state.update { it.copy(isLoading = true, playbackPrep = PlaybackPrep(selection.title, PlaybackPrep.Stage.SEARCHING, "Searching torrent...")) }
-                    }
-                    is StreamResolution.Queuing -> {
-                        _state.update { it.copy(playbackPrep = PlaybackPrep(selection.title, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")) }
-                    }
-                    is StreamResolution.Caching -> {
-                        _state.update { it.copy(playbackPrep = PlaybackPrep(selection.title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
-                    }
-                    is StreamResolution.TryingNextStream -> {
-                        val nextIdx = resolution.attempt - 1
-                        val total = resolution.total
-                        _state.update {
-                            it.copy(
-                                lastPlaybackStreamIndex = nextIdx,
-                                playbackPrep = PlaybackPrep(
-                                    selection.title,
-                                    PlaybackPrep.Stage.CACHING,
-                                    "Stream ${resolution.attempt}/$total unavailable, trying next..."
-                                )
-                            )
-                        }
-                    }
-                    is StreamResolution.Ready -> {
-                        _state.update { it.copy(isLoading = false, playbackPrep = null) }
-                        val recent = RecentItem(selection.contentId, selection.title, "vod", null)
-                        _state.update { it.copy(nowPlaying = recent) }
-                        repository.recentlyWatchedStore.add(recent)
-                        _playEvent.tryEmit(PlayEvent(resolution.url, selection.title, "vod", emptyList(), emptyList()))
-                    }
-                    is StreamResolution.Failed -> {
-                        _state.update { it.copy(isLoading = false, playbackPrep = null, error = resolution.reason) }
-                    }
-                }
+                handleStreamResolution(resolution, selection.title, "vod", stream)
             }
         }
     }
@@ -1089,51 +1137,61 @@ class MainViewModel(
                     _state.update { it.copy(isLoading = false, toastMessage = "Not available on TorBox") }
                     return@launch
                 }
-                _state.update { it.copy(isLoading = false) }
-                val title = "${show.name} S${episode.seasonNumber}E${episode.episodeNumber} — ${episode.name}"
-                playbackPrepJob?.cancel()
-                playbackPrepJob = viewModelScope.launch {
-                    torBoxRepository.resolveEpisode(imdbId, episode.seasonNumber, episode.episodeNumber).collect { resolution ->
-                        when (resolution) {
-                            is StreamResolution.Searching -> {
-                                _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.SEARCHING, "Searching torrent...")) }
-                            }
-                            is StreamResolution.Queuing -> {
-                                _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")) }
-                            }
-                            is StreamResolution.Caching -> {
-                                _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
-                            }
-                            is StreamResolution.TryingNextStream -> {
-                                _state.update {
-                                    it.copy(
-                                        playbackPrep = PlaybackPrep(
-                                            title,
-                                            PlaybackPrep.Stage.CACHING,
-                                            "Stream ${resolution.attempt}/${resolution.total} unavailable, trying next..."
-                                        )
-                                    )
-                                }
-                            }
-                            is StreamResolution.Ready -> {
-                                _state.update { it.copy(playbackPrep = null) }
-                                currentFallbackHashes = resolution.fallbackHashes
-                                currentPlaybackTitle = title
-                                currentContentType = "episode"
-                                val stableId = "${show.id}:${episode.seasonNumber}:${episode.episodeNumber}"
-                                val recentRefs = buildRecentRefsFromCache(excludeId = stableId)
-                                val favRefs = buildFavoriteRefsFromCache(excludeId = stableId)
-                                _playEvent.tryEmit(PlayEvent(resolution.url, title, "episode", recentRefs, favRefs))
-                            }
-                            is StreamResolution.Failed -> {
-                                _state.update { it.copy(playbackPrep = null, error = resolution.reason) }
-                            }
-                        }
-                    }
+                val streams = torBoxRepository.fetchEpisodeStreams(imdbId, episode.seasonNumber, episode.episodeNumber)
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        tmdbStreamSelection = TmdbStreamSelectionState(
+                            streams = streams,
+                            title = "${show.name} S${episode.seasonNumber}E${episode.episodeNumber} — ${episode.name}",
+                            imdbId = imdbId,
+                            tmdbId = show.id.toString(),
+                            contentId = "${show.id}:${episode.seasonNumber}:${episode.episodeNumber}",
+                            contentType = "episode",
+                            show = show,
+                            episode = episode
+                        )
+                    )
                 }
             } catch (e: Exception) {
                 _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to play episode") }
             }
+        }
+    }
+
+    fun playSelectedTmdbEpisodeStream(stream: UnifiedTorrent) {
+        val selection = _state.value.tmdbStreamSelection ?: return
+        val streamIndex = selection.streams.indexOfFirst { it.url == stream.url }.coerceAtLeast(0)
+        val fallbackHashes = selection.streams
+            .filter { it.url != stream.url }
+            .mapNotNull { it.hash }
+            .distinct()
+            .take(5)
+
+        // Keep picker alive — clear failed state from any previous attempt
+        _state.update {
+            it.copy(
+                lastPlaybackSelection = selection,
+                lastPlaybackStreamIndex = streamIndex,
+            )
+        }
+        currentPlaybackTitle = selection.title
+        currentContentType = "episode"
+        playbackPrepJob?.cancel()
+        playbackPrepJob = viewModelScope.launch {
+            // Start cancel-button timer concurrently — reveal after 5s
+            launch { delay(5_000); _state.update { it.copy(playbackPrep = it.playbackPrep?.copy(canCancel = true)) } }
+            torBoxRepository.resolveSelectedEpisodeTorrent(stream, fallbackHashes).collect { resolution ->
+                handleStreamResolution(resolution, selection.title, "episode", stream)
+            }
+        }
+    }
+
+    fun playSelectedTmdbStreamCommon(stream: UnifiedTorrent, contentType: String) {
+        if (contentType == "episode") {
+            playSelectedTmdbEpisodeStream(stream)
+        } else {
+            playSelectedTmdbStream(stream)
         }
     }
 
