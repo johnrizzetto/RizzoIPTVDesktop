@@ -55,7 +55,30 @@
 - curl returns HTTP 200 — token is valid
 
 ## Status
-DEVICE TESTING IN PROGRESS — APK installed 2026-04-24 21:35 ET on kasol projector
+
+### v5 — TorBox Stream Selection Bug Fixes (IN PROGRESS)
+
+**Branch:** `v5/p0-rename-cancellation` (worktree at `/Users/johnrizzetto/v5-p0-phase0`)
+
+**Two bugs reported by user:**
+1. "No streams found" even when torrents exist
+2. Clicking a torrent link shows premature failure instead of loading steps to TorBox
+
+**Bug #1 root cause (identified):** `fetchMovieStreams` (TorBoxRepository.kt ~line 123) wraps the entire `coroutineScope` in a single try/catch. The individual source fetch functions (`fetchTorBoxSearchMovies`, `fetchTorrentioMovies`) each have their own try/catch returning `emptyList()` on failure — but if the outer coroutineScope itself throws (e.g., a crash in the scope launch aggregation), the whole thing returns empty. Need to read exact `fetchMovieStreams` code.
+
+**Bug #2 root cause (identified):** `playSelectedTmdbStream` (MainViewModel.kt ~line 839) calls `torBoxRepository.resolveMovie(selection.imdbId)` which does a **fresh search** and picks the #1 ranked torrent — completely ignoring the `UnifiedTorrent stream: UnifiedTorrent` the user actually selected. Same in `onPlayTmdbEpisode` (~line 902) calling `resolveEpisode`.
+
+**Fix plan for Bug #2:** Add `addMagnetDirect(magnetUrl: String)` in TorBoxRepository that bypasses search and directly calls `addMagnet`. Use it in `playSelectedTmdbStream` with the user's selected `stream.url`. `resolveFallback` (line 326) is the correct pattern reference.
+
+**Full context:** Saved in `BUG_FIX_PROGRESS.md` at repo root.
+
+**Build:** `./gradlew assembleV5Debug`
+
+**Installed:** `com.rizzoplayer.iptv.v5`
+
+---
+
+### v4 — Completed
 
 ## IPTV Credentials (Hardcoded)
 - Username: `87bcb5ed3f`

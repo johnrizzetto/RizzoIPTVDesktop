@@ -124,8 +124,14 @@ class TorBoxRepository(
         val torboxDeferred = async { fetchTorBoxSearchMovies(imdbId) }
         val torrentioDeferred = async { fetchTorrentioMovies(imdbId) }
 
-        val torbox = torboxDeferred.await()
-        val tio = torrentioDeferred.await()
+        val torbox = try { torboxDeferred.await() } catch (e: Exception) {
+            Log.w(TAG, "TorBox Search await failed: ${e.message}")
+            emptyList()
+        }
+        val tio = try { torrentioDeferred.await() } catch (e: Exception) {
+            Log.w(TAG, "Torrentio await failed: ${e.message}")
+            emptyList()
+        }
 
         val torboxHashes = torbox.mapNotNull { it.hash?.lowercase() }.toSet()
         val merged = torbox.toMutableList()
@@ -142,8 +148,14 @@ class TorBoxRepository(
         val torboxDeferred = async { fetchTorBoxSearchEpisodes(imdbId, season, episode) }
         val torrentioDeferred = async { fetchTorrentioEpisodes(imdbId, season, episode) }
 
-        val torbox = torboxDeferred.await()
-        val tio = torrentioDeferred.await()
+        val torbox = try { torboxDeferred.await() } catch (e: Exception) {
+            Log.w(TAG, "TorBox Search episode await failed: ${e.message}")
+            emptyList()
+        }
+        val tio = try { torrentioDeferred.await() } catch (e: Exception) {
+            Log.w(TAG, "Torrentio episode await failed: ${e.message}")
+            emptyList()
+        }
 
         val torboxHashes = torbox.mapNotNull { it.hash?.lowercase() }.toSet()
         val merged = torbox.toMutableList()
@@ -261,6 +273,57 @@ class TorBoxRepository(
             }
         }
         emit(StreamResolution.Failed("Timed out preparing movie"))
+    }
+
+    /**
+     * Playback for a user-selected torrent — no re-search.
+     * Uses the provided UnifiedTorrent directly; fallbackHashes come from
+     * the remaining streams in the selection list.
+     */
+    fun resolveSelectedTorrent(
+        selected: UnifiedTorrent,
+        fallbackHashes: List<String>
+    ): Flow<StreamResolution> = flow {
+        if (selected.hash == null || selected.url.isBlank()) {
+            emit(StreamResolution.Failed("No valid torrent found")); return@flow
+        }
+
+        val hash = selected.hash
+        val cachedMap = try { torBox.checkCached(listOf(hash)) } catch (e: Exception) { emptyMap() }
+        val isCached = cachedMap[hash.lowercase()] == true || cachedMap[hash] == true
+
+        emit(StreamResolution.Queuing)
+        val result = try { torBox.addMagnet(selected.url) } catch (e: Exception) {
+            TorBoxAddResult(success = false, error = e.message)
+        }
+        if (!result.success || result.torrentId == null) {
+            emit(StreamResolution.Failed(result.message ?: "Failed to queue torrent")); return@flow
+        }
+        val torrentId = result.torrentId!!
+
+        if (isCached) {
+            emit(StreamResolution.Caching(100))
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            if (info != null) {
+                val url = getDownloadUrl(torrentId, info.files)
+                if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
+            }
+        }
+
+        val startTime = System.currentTimeMillis()
+        while (System.currentTimeMillis() - startTime < 90_000L) {
+            delay(2_000)
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            if (info != null) {
+                val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
+                if (info.isCompleted) {
+                    val url = getDownloadUrl(torrentId, info.files)
+                    if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
+                }
+                emit(StreamResolution.Caching(pct))
+            }
+        }
+        emit(StreamResolution.Failed("Timed out preparing stream"))
     }
 
     fun resolveEpisode(imdbId: String, season: Int, episode: Int): Flow<StreamResolution> = flow {

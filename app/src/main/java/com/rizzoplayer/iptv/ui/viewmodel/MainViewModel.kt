@@ -1036,7 +1036,7 @@ class MainViewModel(
         currentContentType = "vod"
         playbackPrepJob?.cancel()
         playbackPrepJob = viewModelScope.launch {
-            torBoxRepository.resolveMovie(selection.imdbId).collect { resolution ->
+            torBoxRepository.resolveSelectedTorrent(stream, currentFallbackHashes).collect { resolution ->
                 when (resolution) {
                     is StreamResolution.Searching -> {
                         _state.update { it.copy(isLoading = true, playbackPrep = PlaybackPrep(selection.title, PlaybackPrep.Stage.SEARCHING, "Searching torrent...")) }
