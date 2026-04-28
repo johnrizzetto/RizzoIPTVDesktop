@@ -52,8 +52,9 @@ import com.rizzoplayer.iptv.data.model.TmdbEpisode
 import com.rizzoplayer.iptv.data.model.TmdbSeason
 import com.rizzoplayer.iptv.data.model.TmdbShow
 import com.rizzoplayer.iptv.ui.theme.*
-import com.rizzoplayer.iptv.ui.theme.gridTopRowFocus
+import com.rizzoplayer.iptv.ui.designsystem.rizzoGridTopRowFocus
 import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusGroup
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusable
 import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -157,12 +158,12 @@ fun SeriesHome(
                             modifier = Modifier
                                 .width(80.dp)
                                 .height(120.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .focusable(interactionSource = posterInteractionSource)
-                                .combinedClickable(
+                                .rizzoFocusable(
+                                    onClick = { hero?.let { onSelectShow(it) } },
                                     interactionSource = posterInteractionSource,
-                                    indication = null,
-                                    onClick = { hero?.let { onSelectShow(it) } }
+                                    focusBorderColor = AccentBlue,
+                                    focusBackgroundColor = CardBg,
+                                    shape = RoundedCornerShape(8.dp)
                                 )
                         )
                         Spacer(Modifier.width(14.dp))
@@ -299,7 +300,7 @@ fun TmdbShowGrid(
             modifier = Modifier
                 .fillMaxSize()
                 .rizzoFocusGroup()
-                .gridTopRowFocus(firstFocus),
+                .rizzoGridTopRowFocus(firstFocus),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -451,15 +452,18 @@ fun TmdbShowDetailView(
                         color = if (isSelected) AccentBlue else if (seasonFocused) TextPrimary else TextMuted,
                         fontWeight = if (isSelected || seasonFocused) FontWeight.Bold else FontWeight.Normal,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (isSelected) AccentBlue.copy(alpha = 0.2f) else Color.Transparent)
-                            .then(if (seasonFocused && !isSelected) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(4.dp)) else Modifier)
+                            .background(if (isSelected) AccentBlue.copy(alpha = 0.2f) else Color.Transparent, RoundedCornerShape(4.dp))
+                            .rizzoFocusable(
+                                onClick = {
+                                    selectedSeasonIdx = idx
+                                    episodeFocusTrigger++
+                                },
+                                interactionSource = seasonInteractionSource,
+                                shape = RoundedCornerShape(4.dp),
+                                focusBorderColor = if (isSelected) Color.Transparent else AccentBlue,
+                                focusBackgroundColor = Color.Transparent
+                            )
                             .onFocusChanged { if (it.isFocused && !isSelected) { selectedSeasonIdx = idx; episodeFocusTrigger++ } }
-                            .focusable(interactionSource = seasonInteractionSource)
-                            .clickable {
-                                selectedSeasonIdx = idx
-                                episodeFocusTrigger++
-                            }
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
@@ -502,12 +506,14 @@ fun TmdbEpisodeRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isFocused) NavFocusBg else Color.Transparent)
-            .then(if (isFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
-            .focusable(interactionSource = interactionSource)
+            .rizzoFocusable(
+                onClick = onPlay,
+                interactionSource = interactionSource,
+                shape = RoundedCornerShape(6.dp),
+                focusBorderColor = AccentBlue,
+                focusBackgroundColor = NavFocusBg
+            )
             .focusRequester(onFocus)
-            .clickable(onClick = onPlay)
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -1,5 +1,6 @@
 package com.rizzoplayer.iptv.ui.screens.home
 
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -113,11 +114,13 @@ fun ChannelRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isFocused) NavFocusBg else androidx.compose.ui.graphics.Color.Transparent)
-            .then(if (isFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
-            .focusable(interactionSource = interactionSource)
-            .clickable(onClick = onPlay)
+            .rizzoFocusable(
+                onClick = onPlay,
+                interactionSource = interactionSource,
+                shape = RoundedCornerShape(6.dp),
+                focusBorderColor = AccentBlue,
+                focusBackgroundColor = NavFocusBg
+            )
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

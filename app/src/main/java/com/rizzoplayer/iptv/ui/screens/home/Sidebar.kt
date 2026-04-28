@@ -32,6 +32,7 @@ import com.rizzoplayer.iptv.R
 import com.rizzoplayer.iptv.ui.navigation.FocusManager
 import com.rizzoplayer.iptv.ui.navigation.Screen
 import com.rizzoplayer.iptv.ui.theme.*
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusable
 
 private data class NavEntry(val icon: String, val label: String, val route: String)
 private val NAV_ENTRIES = listOf(
@@ -152,14 +153,7 @@ private fun SidebarNavItem(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.04f else 1f,
-        animationSpec = spring(
-            stiffness = Spring.StiffnessMediumLow,
-            dampingRatio = Spring.DampingRatioNoBouncy,
-        ),
-        label = "navScale",
-    )
+
     val bg = when {
         danger && isFocused -> Color(0xFF2A0A0A)
         isFocused -> NavFocusBg
@@ -181,17 +175,12 @@ private fun SidebarNavItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale)
-            .clip(RoundedCornerShape(6.dp))
-            .background(bg)
-            .then(
-                if (isFocused) Modifier.border(
-                    2.dp,
-                    if (danger) RedColor.copy(alpha = 0.45f)
-                    else AccentBlue,
-                    RoundedCornerShape(6.dp)
-                )
-                else Modifier
+            .rizzoFocusable(
+                onClick = onClick,
+                shape = RoundedCornerShape(6.dp),
+                interactionSource = interactionSource,
+                focusBorderColor = if (danger) RedColor.copy(alpha = 0.45f) else AccentBlue,
+                focusBackgroundColor = bg // use the calculated bg for focus
             )
             .onFocusChanged {
                 // Track sidebar index for return navigation (Phase 2 FocusManager pattern)
@@ -202,8 +191,6 @@ private fun SidebarNavItem(
                 }
             }
             .focusRequester(fr)
-            .focusable(interactionSource = interactionSource)
-            .clickable(onClick = onClick)
             .padding(horizontal = if (expanded) 10.dp else 0.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

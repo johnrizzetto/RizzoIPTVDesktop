@@ -1,10 +1,11 @@
 package com.rizzoplayer.iptv.ui.designsystem
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -16,8 +17,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -26,37 +27,35 @@ import androidx.compose.ui.unit.dp
 import com.rizzoplayer.iptv.ui.theme.RizzoAccent
 import com.rizzoplayer.iptv.ui.theme.RizzoAccentDim
 import com.rizzoplayer.iptv.ui.theme.RizzoMotion
+import com.rizzoplayer.iptv.ui.theme.Spec
 
 /**
  * Canonical TV-remote-friendly focusable + clickable modifier for RizzoIPTV.
  *
- * - 2.dp [RizzoAccent] border ring on focus (visible at 3–5m TV viewing distance)
- * - Subtle [RizzoAccentDim] tint background on focus
- * - Scale-up on focus (1.04x), scale-down on press (0.95x) — [RizzoMotion.DefaultSpring]
- * - Uses [MutableInteractionSource] for correct hot-observable focus tracking
- * - No ripple (TV convention — ripple is phone/touch idiom)
- *
- * Usage:
- * ```
- * Modifier.rizzoFocusable(shape = RizzoRadii.SmShape) { doThing() }
- * ```
+ * - Phase 2 Spec: 4.dp [focusBorderColor] ring on focus
+ * - Subtle [focusBackgroundColor] tint background on focus
+ * - Scale-up on focus (1.06x), scale-down on press (0.95x)
+ * - Shadow elevation (8.dp) on focus
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Stable
 fun Modifier.rizzoFocusable(
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     shape: Shape = RoundedCornerShape(8.dp),
-    focusBorderWidth: Dp = 2.dp,
+    focusBorderWidth: Dp = Spec.focusBorder,
     focusBorderColor: Color = RizzoAccent,
     focusBackgroundColor: Color = RizzoAccentDim,
+    interactionSource: MutableInteractionSource? = null,
 ): Modifier = composed {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val actualInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
+    val isFocused by actualInteractionSource.collectIsFocusedAsState()
+    val isPressed by actualInteractionSource.collectIsPressedAsState()
 
     val scale by animateFloatAsState(
         targetValue = when {
             isPressed -> RizzoMotion.PressScale
-            isFocused -> RizzoMotion.FocusScale
+            isFocused -> Spec.focusScale
             else -> 1f
         },
         animationSpec = RizzoMotion.DefaultSpring,
@@ -65,6 +64,10 @@ fun Modifier.rizzoFocusable(
 
     this
         .scale(scale)
+        .then(
+            if (isFocused) Modifier.shadow(Spec.focusElevation, shape)
+            else Modifier
+        )
         .background(
             color = if (isFocused) focusBackgroundColor else Color.Transparent,
             shape = shape,
@@ -73,22 +76,16 @@ fun Modifier.rizzoFocusable(
             if (isFocused) Modifier.border(focusBorderWidth, focusBorderColor, shape)
             else Modifier,
         )
-        .clickable(
-            interactionSource = interactionSource,
+        .combinedClickable(
+            interactionSource = actualInteractionSource,
             indication = null,
             onClick = onClick,
+            onLongClick = onLongClick
         )
 }
 
 /**
  * Attach a [FocusRequester] to this modifier for programmatic focus control.
- *
- * Usage:
- * ```
- * val focusRequester = remember { FocusRequester() }
- * Modifier.rizzoFocusable(onClick = {})
- *   .rizzoFocusRequester(focusRequester)
- * ```
  */
 @Stable
 fun Modifier.rizzoFocusRequester(focusRequester: FocusRequester): Modifier =
@@ -96,32 +93,27 @@ fun Modifier.rizzoFocusRequester(focusRequester: FocusRequester): Modifier =
 
 /**
  * Convenience overload that combines [rizzoFocusable] with [rizzoFocusRequester].
- *
- * Usage:
- * ```
- * val focusRequester = remember { FocusRequester() }
- * Modifier.rizzoFocusableWithRequester(
- *   focusRequester = focusRequester,
- *   onClick = {},
- * )
- * ```
  */
 @Stable
 fun Modifier.rizzoFocusableWithRequester(
     focusRequester: FocusRequester,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     shape: Shape = RoundedCornerShape(8.dp),
-    focusBorderWidth: Dp = 2.dp,
+    focusBorderWidth: Dp = Spec.focusBorder,
     focusBorderColor: Color = RizzoAccent,
     focusBackgroundColor: Color = RizzoAccentDim,
+    interactionSource: MutableInteractionSource? = null,
 ): Modifier = this
     .rizzoFocusRequester(focusRequester)
     .rizzoFocusable(
         onClick = onClick,
+        onLongClick = onLongClick,
         shape = shape,
         focusBorderWidth = focusBorderWidth,
         focusBorderColor = focusBorderColor,
         focusBackgroundColor = focusBackgroundColor,
+        interactionSource = interactionSource,
     )
 
 // ── Backwards-compatibility shim ──────────────────────────────────────────────
@@ -132,19 +124,23 @@ fun Modifier.rizzoFocusableWithRequester(
 @Deprecated(
     message = "Use Modifier.rizzoFocusable",
     replaceWith = ReplaceWith(
-        "Modifier.rizzoFocusable(onClick, shape, focusBorderWidth, focusBorderColor, focusBackgroundColor)",
+        "Modifier.rizzoFocusable(onClick, onLongClick, shape, focusBorderWidth, focusBorderColor, focusBackgroundColor, interactionSource)",
     ),
 )
 fun Modifier.tvClickable(
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     shape: Shape = RoundedCornerShape(8.dp),
-    focusBorderWidth: Dp = 2.dp,
+    focusBorderWidth: Dp = Spec.focusBorder,
     focusBorderColor: Color = RizzoAccent,
     focusBackgroundColor: Color = RizzoAccentDim,
+    interactionSource: MutableInteractionSource? = null,
 ): Modifier = rizzoFocusable(
     onClick = onClick,
+    onLongClick = onLongClick,
     shape = shape,
     focusBorderWidth = focusBorderWidth,
     focusBorderColor = focusBorderColor,
     focusBackgroundColor = focusBackgroundColor,
+    interactionSource = interactionSource,
 )

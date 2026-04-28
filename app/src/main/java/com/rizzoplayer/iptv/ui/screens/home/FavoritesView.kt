@@ -1,5 +1,6 @@
 package com.rizzoplayer.iptv.ui.screens.home
 
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -110,10 +111,13 @@ private fun FavoriteRow(
                     fontSize = 12.sp,
                     color = if (mFocused) AccentBlue else TextMuted,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(if (mFocused) AccentBlue.copy(alpha = 0.15f) else Color.Transparent)
-                        .focusable(interactionSource = mInteractionSource)
-                        .clickable { action() }
+                        .rizzoFocusable(
+                            onClick = { action() },
+                            interactionSource = mInteractionSource,
+                            shape = RoundedCornerShape(4.dp),
+                            focusBorderColor = Color.Transparent,
+                            focusBackgroundColor = AccentBlue.copy(alpha = 0.15f)
+                        )
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 )
             }
@@ -124,11 +128,14 @@ private fun FavoriteRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isFocused) CardFocused else CardBg)
-            .then(if (isFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
-            .focusable(interactionSource = interactionSource)
-            .clickable(onClick = onPlay)
+            .background(CardBg, RoundedCornerShape(6.dp))
+            .rizzoFocusable(
+                onClick = onPlay,
+                interactionSource = interactionSource,
+                shape = RoundedCornerShape(6.dp),
+                focusBorderColor = AccentBlue,
+                focusBackgroundColor = CardFocused
+            )
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

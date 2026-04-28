@@ -1,5 +1,6 @@
 package com.rizzoplayer.iptv.ui.screens.home
 
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusable
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -177,20 +178,15 @@ object TorrentioParser {
 fun StreamItemCard(
     stream: Any,  // UnifiedTorrent or TorrentioStream
     metadata: TorrentioParser.StreamMetadata,
-    isFocused: Boolean,
     isFailed: Boolean,
     failedReason: String?,
     onSelect: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    interactionSource: MutableInteractionSource? = null
 ) {
-    val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.03f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
-        label = "cardScale",
-    )
-
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
+    val actualInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
+    val isFocused by actualInteractionSource.collectIsFocusedAsState()
+    val pressed by actualInteractionSource.collectIsPressedAsState()
 
     val cardBg = when {
         isFailed && pressed -> Color(0xFF2A0A0A)
@@ -198,13 +194,6 @@ fun StreamItemCard(
         isFocused && pressed -> CardBgFocusedPressed
         isFocused           -> CardBgFocused
         else                -> CardBgDefault
-    }
-
-    val borderColor = when {
-        isFailed && isFocused -> Color(0xFFBB3333).copy(alpha = 0.9f)
-        isFailed             -> Color(0xFF992222).copy(alpha = 0.7f)
-        isFocused            -> AccentBlue.copy(alpha = 0.8f)
-        else                 -> BorderColor.copy(alpha = 0.3f)
     }
 
     val textColor = when {
@@ -217,19 +206,18 @@ fun StreamItemCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .scale(scale)
-            .shadow(if (isFocused) 12.dp else 2.dp, RoundedCornerShape(10.dp))
-            .clip(RoundedCornerShape(10.dp))
-            .background(cardBg)
             .border(
-                width = if (isFocused) 1.5.dp else 0.5.dp,
-                color = borderColor,
+                width = 0.5.dp,
+                color = if (isFailed) Color(0xFF992222).copy(alpha = 0.7f) else BorderColor.copy(alpha = 0.3f),
                 shape = RoundedCornerShape(10.dp)
             )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onSelect
+            .background(cardBg, RoundedCornerShape(10.dp))
+            .rizzoFocusable(
+                onClick = onSelect,
+                interactionSource = actualInteractionSource,
+                shape = RoundedCornerShape(10.dp),
+                focusBorderColor = if (isFailed) Color(0xFFBB3333).copy(alpha = 0.9f) else AccentBlue.copy(alpha = 0.8f),
+                focusBackgroundColor = Color.Transparent
             )
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
@@ -501,7 +489,6 @@ fun PremiumStreamSelectionOverlay(
                     StreamItemCard(
                         stream = stream,
                         metadata = metadata,
-                        isFocused = isFocused,
                         isFailed = isFailed,
                         failedReason = if (isFailed) failedReason else null,
                         onSelect = {
@@ -513,7 +500,6 @@ fun PremiumStreamSelectionOverlay(
                         modifier = Modifier
                             .focusRequester(if (idx == 0) firstItemFocus else FocusRequester())
                             .onFocusChanged { if (it.isFocused) focusedIdx = idx }
-                            .focusable(),
                     )
                 }
             }

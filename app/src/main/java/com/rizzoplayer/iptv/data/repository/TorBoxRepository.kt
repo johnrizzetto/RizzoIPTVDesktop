@@ -127,13 +127,11 @@ class TorBoxRepository(
         val torboxDeferred = async { fetchTorBoxSearchMovies(imdbId) }
         val torrentioDeferred = async { fetchTorrentioMovies(imdbId) }
 
-        val torbox = try { torboxDeferred.await() } catch (e: Exception) {
-            if (e is CancellationException) throw e
+        val torbox = try { torboxDeferred.await() } catch (e: Exception) { if (e is CancellationException) throw e;
             Log.w(TAG, "TorBox Search await failed: ${e.message}")
             emptyList()
         }
-        val tio = try { torrentioDeferred.await() } catch (e: Exception) {
-            if (e is CancellationException) throw e
+        val tio = try { torrentioDeferred.await() } catch (e: Exception) { if (e is CancellationException) throw e;
             Log.w(TAG, "Torrentio await failed: ${e.message}")
             emptyList()
         }
@@ -154,13 +152,11 @@ class TorBoxRepository(
         val torboxDeferred = async { fetchTorBoxSearchEpisodes(imdbId, season, episode) }
         val torrentioDeferred = async { fetchTorrentioEpisodes(imdbId, season, episode) }
 
-        val torbox = try { torboxDeferred.await() } catch (e: Exception) {
-            if (e is CancellationException) throw e
+        val torbox = try { torboxDeferred.await() } catch (e: Exception) { if (e is CancellationException) throw e;
             Log.w(TAG, "TorBox Search episode await failed: ${e.message}")
             emptyList()
         }
-        val tio = try { torrentioDeferred.await() } catch (e: Exception) {
-            if (e is CancellationException) throw e
+        val tio = try { torrentioDeferred.await() } catch (e: Exception) { if (e is CancellationException) throw e;
             Log.w(TAG, "Torrentio episode await failed: ${e.message}")
             emptyList()
         }
@@ -177,8 +173,7 @@ class TorBoxRepository(
         return try {
             torBoxSearch.searchMovieTorrents(imdbId, checkCache = true, checkOwned = true)
                 .map { searchToUnified(it) }
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
+        } catch (e: Exception) { if (e is CancellationException) throw e;
             Log.w(TAG, "TorBox Search movie failed: ${e.message}")
             emptyList()
         }
@@ -188,8 +183,7 @@ class TorBoxRepository(
         return try {
             torBoxSearch.searchEpisodeTorrents(imdbId, season, episode, checkCache = true, checkOwned = true)
                 .map { searchToUnified(it) }
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
+        } catch (e: Exception) { if (e is CancellationException) throw e;
             Log.w(TAG, "TorBox Search episode failed: ${e.message}")
             emptyList()
         }
@@ -198,8 +192,7 @@ class TorBoxRepository(
     private suspend fun fetchTorrentioMovies(imdbId: String): List<UnifiedTorrent> {
         return try {
             torrentio.getMovieStream(TORBOX_CONFIG, imdbId).streams.map { torrentioToUnified(it) }
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
+        } catch (e: Exception) { if (e is CancellationException) throw e;
             Log.w(TAG, "Torrentio movie failed: ${e.message}")
             emptyList()
         }
@@ -208,8 +201,7 @@ class TorBoxRepository(
     private suspend fun fetchTorrentioEpisodes(imdbId: String, season: Int, episode: Int): List<UnifiedTorrent> {
         return try {
             torrentio.getEpisodeStream(TORBOX_CONFIG, imdbId, season, episode).streams.map { torrentioToUnified(it) }
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
+        } catch (e: Exception) { if (e is CancellationException) throw e;
             Log.w(TAG, "Torrentio episode failed: ${e.message}")
             emptyList()
         }
@@ -254,8 +246,7 @@ class TorBoxRepository(
 
         val unified = try {
             fetchMovieStreams(imdbId)
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
+        } catch (e: Exception) { if (e is CancellationException) throw e;
             emit(StreamResolution.Failed("Search failed: ${e.message}")); return@flow
         }
 
@@ -264,7 +255,7 @@ class TorBoxRepository(
         val hashes = unified.mapNotNull { it.hash }.distinct()
         val fallbackHashes = unified.drop(1).mapNotNull { it.hash }.take(5)
 
-        val cachedMap = try { torBox.checkCached(hashes) } catch (e: Exception) { emptyMap() }
+        val cachedMap = try { torBox.checkCached(hashes) } catch (e: Exception) { if (e is CancellationException) throw e; emptyMap() }
 
         val best = unified.firstOrNull { t ->
             t.hash?.let { cachedMap[it.lowercase()] == true || cachedMap[it] == true } == true
@@ -275,7 +266,7 @@ class TorBoxRepository(
         }
 
         emit(StreamResolution.Queuing)
-        val result = try { torBox.addMagnet(best.url) } catch (e: Exception) {
+        val result = try { torBox.addMagnet(best.url) } catch (e: Exception) { if (e is CancellationException) throw e;
             TorBoxAddResult(success = false, error = e.message)
         }
         if (!result.success || result.torrentId == null) {
@@ -287,7 +278,7 @@ class TorBoxRepository(
 
         if (isCached) {
             emit(StreamResolution.Caching(100))
-            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val url = getDownloadUrl(torrentId, info.files)
                 if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
@@ -297,7 +288,7 @@ class TorBoxRepository(
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < 30_000L) {
             delay(2_000)
-            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
                 if (info.isCompleted) {
@@ -317,16 +308,15 @@ class TorBoxRepository(
                 emit(StreamResolution.TryingNextStream(attempt = idx + 1, total = allHashes.size))
                 // resolve this fallback torrent directly (no re-search needed)
                 val magnet = parseMagnetFromHash(h)
-                val addResult = try { torBox.addMagnet(magnet) } catch (e: Exception) {
-                    if (e is CancellationException) throw e
+                val addResult = try { torBox.addMagnet(magnet) } catch (e: Exception) { if (e is CancellationException) throw e;
                     null
                 }
                 if (addResult?.success == true && addResult.torrentId != null) {
                     val fbTorrentId = addResult.torrentId!!
-                    val fbCached = try { torBox.checkCached(listOf(h)) } catch (e: Exception) { emptyMap() }
+                    val fbCached = try { torBox.checkCached(listOf(h)) } catch (e: Exception) { if (e is CancellationException) throw e; emptyMap() }
                     if (fbCached[h.lowercase()] == true || fbCached[h] == true) {
                         emit(StreamResolution.Caching(100))
-                        val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { null }
+                        val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
                         if (fbInfo != null) {
                             val fbUrl = getDownloadUrl(fbTorrentId, fbInfo.files)
                             if (fbUrl != null) { emit(StreamResolution.Ready(fbUrl, emptyList())); return@flow }
@@ -335,7 +325,7 @@ class TorBoxRepository(
                     val fbStart = System.currentTimeMillis()
                     while (System.currentTimeMillis() - fbStart < 30_000L) {
                         delay(2_000)
-                        val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { null }
+                        val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
                         if (fbInfo != null) {
                             val fbPct = (fbInfo.percentDone * 100).toInt().coerceIn(0, 99)
                             if (fbInfo.isCompleted) {
@@ -370,11 +360,11 @@ class TorBoxRepository(
         }
 
         val hash = selected.hash
-        val cachedMap = try { torBox.checkCached(listOf(hash)) } catch (e: Exception) { emptyMap() }
+        val cachedMap = try { torBox.checkCached(listOf(hash)) } catch (e: Exception) { if (e is CancellationException) throw e; emptyMap() }
         val isCached = cachedMap[hash.lowercase()] == true || cachedMap[hash] == true
 
         emit(StreamResolution.Queuing)
-        val result = try { torBox.addMagnet(selected.url) } catch (e: Exception) {
+        val result = try { torBox.addMagnet(selected.url) } catch (e: Exception) { if (e is CancellationException) throw e;
             TorBoxAddResult(success = false, error = e.message)
         }
         if (!result.success || result.torrentId == null) {
@@ -384,7 +374,7 @@ class TorBoxRepository(
 
         if (isCached) {
             emit(StreamResolution.Caching(100))
-            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val url = getDownloadUrl(torrentId, info.files)
                 if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
@@ -394,7 +384,7 @@ class TorBoxRepository(
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < 30_000L) {
             delay(2_000)
-            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
                 if (info.isCompleted) {
@@ -411,21 +401,19 @@ class TorBoxRepository(
             for ((idx, h) in allHashes.withIndex()) {
                 if (idx == 0) continue // already tried idx=0 (the selected torrent)
                 emit(StreamResolution.TryingNextStream(attempt = idx + 1, total = allHashes.size))
-                val magnet = try { parseMagnetFromHash(h) } catch (e: Exception) {
-                    if (e is CancellationException) throw e
+                val magnet = try { parseMagnetFromHash(h) } catch (e: Exception) { if (e is CancellationException) throw e;
                     null
                 }
                 if (magnet != null) {
-                    val addResult = try { torBox.addMagnet(magnet) } catch (e: Exception) {
-                        if (e is CancellationException) throw e
+                    val addResult = try { torBox.addMagnet(magnet) } catch (e: Exception) { if (e is CancellationException) throw e;
                         null
                     }
                     if (addResult?.success == true && addResult.torrentId != null) {
                         val fbTorrentId = addResult.torrentId!!
-                        val fbCached = try { torBox.checkCached(listOf(h)) } catch (e: Exception) { emptyMap() }
+                        val fbCached = try { torBox.checkCached(listOf(h)) } catch (e: Exception) { if (e is CancellationException) throw e; emptyMap() }
                         if (fbCached[h.lowercase()] == true || fbCached[h] == true) {
                             emit(StreamResolution.Caching(100))
-                            val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { null }
+                            val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
                             if (fbInfo != null) {
                                 val fbUrl = getDownloadUrl(fbTorrentId, fbInfo.files)
                                 if (fbUrl != null) { emit(StreamResolution.Ready(fbUrl, emptyList())); return@flow }
@@ -434,7 +422,7 @@ class TorBoxRepository(
                         val fbStart = System.currentTimeMillis()
                         while (System.currentTimeMillis() - fbStart < 30_000L) {
                             delay(2_000)
-                            val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { null }
+                            val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
                             if (fbInfo != null) {
                                 val fbPct = (fbInfo.percentDone * 100).toInt().coerceIn(0, 99)
                                 if (fbInfo.isCompleted) {
@@ -468,11 +456,11 @@ class TorBoxRepository(
         }
 
         val hash = selected.hash
-        val cachedMap = try { torBox.checkCached(listOf(hash)) } catch (e: Exception) { emptyMap() }
+        val cachedMap = try { torBox.checkCached(listOf(hash)) } catch (e: Exception) { if (e is CancellationException) throw e; emptyMap() }
         val isCached = cachedMap[hash.lowercase()] == true || cachedMap[hash] == true
 
         emit(StreamResolution.Queuing)
-        val result = try { torBox.addMagnet(selected.url) } catch (e: Exception) {
+        val result = try { torBox.addMagnet(selected.url) } catch (e: Exception) { if (e is CancellationException) throw e;
             TorBoxAddResult(success = false, error = e.message)
         }
         if (!result.success || result.torrentId == null) {
@@ -482,7 +470,7 @@ class TorBoxRepository(
 
         if (isCached) {
             emit(StreamResolution.Caching(100))
-            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val url = getDownloadUrl(torrentId, info.files)
                 if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
@@ -492,7 +480,7 @@ class TorBoxRepository(
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < 30_000L) {
             delay(2_000)
-            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
                 if (info.isCompleted) {
@@ -510,16 +498,15 @@ class TorBoxRepository(
                 if (idx == 0) continue // already tried idx=0
                 emit(StreamResolution.TryingNextStream(attempt = idx + 1, total = allHashes.size))
                 val magnet = parseMagnetFromHash(h)
-                val addResult = try { torBox.addMagnet(magnet) } catch (e: Exception) {
-                    if (e is CancellationException) throw e
+                val addResult = try { torBox.addMagnet(magnet) } catch (e: Exception) { if (e is CancellationException) throw e;
                     null
                 }
                 if (addResult?.success == true && addResult.torrentId != null) {
                     val fbTorrentId = addResult.torrentId!!
-                    val fbCached = try { torBox.checkCached(listOf(h)) } catch (e: Exception) { emptyMap() }
+                    val fbCached = try { torBox.checkCached(listOf(h)) } catch (e: Exception) { if (e is CancellationException) throw e; emptyMap() }
                     if (fbCached[h.lowercase()] == true || fbCached[h] == true) {
                         emit(StreamResolution.Caching(100))
-                        val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { null }
+                        val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
                         if (fbInfo != null) {
                             val fbUrl = getDownloadUrl(fbTorrentId, fbInfo.files)
                             if (fbUrl != null) { emit(StreamResolution.Ready(fbUrl, emptyList())); return@flow }
@@ -528,7 +515,7 @@ class TorBoxRepository(
                     val fbStart = System.currentTimeMillis()
                     while (System.currentTimeMillis() - fbStart < 30_000L) {
                         delay(2_000)
-                        val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { null }
+                        val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
                         if (fbInfo != null) {
                             val fbPct = (fbInfo.percentDone * 100).toInt().coerceIn(0, 99)
                             if (fbInfo.isCompleted) {
@@ -551,8 +538,7 @@ class TorBoxRepository(
 
         val unified = try {
             fetchEpisodeStreams(imdbId, season, episode)
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
+        } catch (e: Exception) { if (e is CancellationException) throw e;
             emit(StreamResolution.Failed("Search failed: ${e.message}")); return@flow
         }
 
@@ -561,7 +547,7 @@ class TorBoxRepository(
         val hashes = unified.mapNotNull { it.hash }.distinct()
         val fallbackHashes = unified.drop(1).mapNotNull { it.hash }.take(5)
 
-        val cachedMap = try { torBox.checkCached(hashes) } catch (e: Exception) { emptyMap() }
+        val cachedMap = try { torBox.checkCached(hashes) } catch (e: Exception) { if (e is CancellationException) throw e; emptyMap() }
 
         val best = unified.firstOrNull { t ->
             t.hash?.let { cachedMap[it.lowercase()] == true || cachedMap[it] == true } == true
@@ -572,7 +558,7 @@ class TorBoxRepository(
         }
 
         emit(StreamResolution.Queuing)
-        val result = try { torBox.addMagnet(best.url) } catch (e: Exception) {
+        val result = try { torBox.addMagnet(best.url) } catch (e: Exception) { if (e is CancellationException) throw e;
             TorBoxAddResult(success = false, error = e.message)
         }
         if (!result.success || result.torrentId == null) {
@@ -584,7 +570,7 @@ class TorBoxRepository(
 
         if (isCached) {
             emit(StreamResolution.Caching(100))
-            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val url = getDownloadUrl(torrentId, info.files)
                 if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
@@ -594,7 +580,7 @@ class TorBoxRepository(
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < 30_000L) {
             delay(2_000)
-            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
                 if (info.isCompleted) {
@@ -612,21 +598,19 @@ class TorBoxRepository(
             for ((idx, h) in allHashes.withIndex()) {
                 if (idx == 0) continue // already tried idx=0 (the selected torrent)
                 emit(StreamResolution.TryingNextStream(attempt = idx + 1, total = allHashes.size))
-                val magnet = try { parseMagnetFromHash(h) } catch (e: Exception) {
-                    if (e is CancellationException) throw e
+                val magnet = try { parseMagnetFromHash(h) } catch (e: Exception) { if (e is CancellationException) throw e;
                     null
                 }
                 if (magnet != null) {
-                    val addResult = try { torBox.addMagnet(magnet) } catch (e: Exception) {
-                        if (e is CancellationException) throw e
+                    val addResult = try { torBox.addMagnet(magnet) } catch (e: Exception) { if (e is CancellationException) throw e;
                         null
                     }
                     if (addResult?.success == true && addResult.torrentId != null) {
                         val fbTorrentId = addResult.torrentId!!
-                        val fbCached = try { torBox.checkCached(listOf(h)) } catch (e: Exception) { emptyMap() }
+                        val fbCached = try { torBox.checkCached(listOf(h)) } catch (e: Exception) { if (e is CancellationException) throw e; emptyMap() }
                         if (fbCached[h.lowercase()] == true || fbCached[h] == true) {
                             emit(StreamResolution.Caching(100))
-                            val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { null }
+                            val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
                             if (fbInfo != null) {
                                 val fbUrl = getDownloadUrl(fbTorrentId, fbInfo.files)
                                 if (fbUrl != null) { emit(StreamResolution.Ready(fbUrl, emptyList())); return@flow }
@@ -635,7 +619,7 @@ class TorBoxRepository(
                         val fbStart = System.currentTimeMillis()
                         while (System.currentTimeMillis() - fbStart < 30_000L) {
                             delay(2_000)
-                            val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { null }
+                            val fbInfo = try { torBox.getTorrentInfo(fbTorrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
                             if (fbInfo != null) {
                                 val fbPct = (fbInfo.percentDone * 100).toInt().coerceIn(0, 99)
                                 if (fbInfo.isCompleted) {
@@ -657,7 +641,7 @@ class TorBoxRepository(
     fun resolveFallback(hash: String): Flow<StreamResolution> = flow {
         emit(StreamResolution.Queuing)
         val magnet = parseMagnetFromHash(hash)
-        val result = try { torBox.addMagnet(magnet) } catch (e: Exception) {
+        val result = try { torBox.addMagnet(magnet) } catch (e: Exception) { if (e is CancellationException) throw e;
             TorBoxAddResult(success = false, error = e.message)
         }
         if (!result.success || result.torrentId == null) {
@@ -666,7 +650,7 @@ class TorBoxRepository(
         val torrentId = result.torrentId!!
 
         emit(StreamResolution.Caching(100))
-        val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+        val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
         if (info != null) {
             val url = getDownloadUrl(torrentId, info.files)
             if (url != null) { emit(StreamResolution.Ready(url)); return@flow }
@@ -675,7 +659,7 @@ class TorBoxRepository(
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < 30_000L) {
             delay(2_000)
-            val torrentInfo = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { null }
+            val torrentInfo = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (torrentInfo != null) {
                 val pct = (torrentInfo.percentDone * 100).toInt().coerceIn(0, 99)
                 if (torrentInfo.isCompleted) {

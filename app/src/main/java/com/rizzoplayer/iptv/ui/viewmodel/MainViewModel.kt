@@ -57,6 +57,7 @@ sealed class BrowseContent {
         val imdbId: String,
         val tmdbId: String,
         val contentId: String,
+        val contentType: String = "vod"
     ) : BrowseContent()
 }
 
@@ -311,6 +312,7 @@ class MainViewModel(
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _state.update { it.copy(playbackPrep = null, error = e.message ?: "Fallback failed") }
             }
         }
@@ -337,7 +339,10 @@ class MainViewModel(
                 }
             }
             current
-        } catch (e: Exception) { url }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            url
+        }
     }
 
     private val backStack = ArrayDeque<Pair<BrowseContent, Int>>()
@@ -436,6 +441,7 @@ class MainViewModel(
                             } catch (_: CancellationException) {
                                 // expected on next keystroke; do nothing
                             } catch (e: Exception) {
+                                if (e is CancellationException) throw e
                                 _state.update { it.copy(isSearchLoading = false, error = e.message ?: "Search failed") }
                             }
                         }
@@ -683,6 +689,7 @@ class MainViewModel(
     }
 
     fun goBack() {
+        playbackPrepJob?.cancel()
         if (backStack.isEmpty()) {
             // Already at root — clear canGoBack flag without reloading content.
             // This prevents the "back on error → home" navigation jump.
@@ -743,6 +750,7 @@ class MainViewModel(
                         val content = withContext(Dispatchers.IO) { tmdbBlock() }
                         _state.update { it.copy(isLoading = false, content = content, canGoBack = backStack.isNotEmpty()) }
                     } catch (e: Exception) {
+                        if (e is CancellationException) throw e
                         _state.update { it.copy(isLoading = false, error = e.message ?: "Unknown error") }
                     }
                 }
@@ -754,6 +762,7 @@ class MainViewModel(
                         val content = withContext(Dispatchers.IO) { liveBlock(creds) }
                         _state.update { it.copy(isLoading = false, content = content, canGoBack = backStack.isNotEmpty()) }
                     } catch (e: Exception) {
+                        if (e is CancellationException) throw e
                         _state.update { it.copy(isLoading = false, error = e.message ?: "Unknown error") }
                     }
                 }
@@ -930,6 +939,7 @@ class MainViewModel(
                 val streams = try {
                     torBoxRepository.fetchMovieStreams(imdbId)
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     _state.update { it.copy(isLoading = false, error = "Failed to search: ${e.message}") }
                     return@launch
                 }
@@ -937,6 +947,14 @@ class MainViewModel(
                     _state.update { it.copy(isLoading = false, error = "No streams found") }
                     return@launch
                 }
+                val currentContent = _state.value.content
+                val currentScroll = if (currentContent is BrowseContent.TmdbMovies || currentContent is BrowseContent.TmdbShows) {
+                    _state.value.currentGridScrollPosition
+                } else {
+                    0
+                }
+                backStack.add(currentContent to currentScroll)
+
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -950,12 +968,13 @@ class MainViewModel(
                             imdbId = imdbId,
                             tmdbId = detail.id.toString(),
                             contentId = detail.id.toString(),
+                            contentType = "vod"
                         ),
                         canGoBack = true,
-
                     )
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to play movie") }
             }
         }
@@ -980,7 +999,7 @@ class MainViewModel(
             imdbId = picker.imdbId,
             tmdbId = picker.tmdbId,
             contentId = picker.contentId,
-            contentType = "vod",
+            contentType = picker.contentType,
         )
         val streamIndex = picker.streams.indexOfFirst { it.url == stream.url }.coerceAtLeast(0)
         _state.update {
@@ -995,10 +1014,15 @@ class MainViewModel(
             .distinct()
             .take(5)
         currentPlaybackTitle = picker.title
-        currentContentType = "vod"
+        currentContentType = picker.contentType
         playbackPrepJob?.cancel()
         playbackPrepJob = viewModelScope.launch {
-            torBoxRepository.resolveMovie(picker.imdbId).collect { resolution ->
+            val flow = if (picker.contentType == "episode") {
+                torBoxRepository.resolveSelectedEpisodeTorrent(stream, currentFallbackHashes)
+            } else {
+                torBoxRepository.resolveSelectedTorrent(stream, currentFallbackHashes)
+            }
+            flow.collect { resolution ->
                 when (resolution) {
                     is StreamResolution.Searching -> {
                         _state.update { it.copy(
@@ -1035,29 +1059,7 @@ class MainViewModel(
                         }
                     }
                     is StreamResolution.Ready -> {
-                        _state.update {
-                            it.copy(
-                                content = BrowseContent.TmdbMovieDetail(
-                                    TmdbMovie(
-                                        id = picker.tmdbId.toIntOrNull() ?: 0,
-                                        title = picker.title,
-                                        overview = "",
-                                        posterPath = null,
-                                        backdropPath = null,
-                                        releaseDate = "",
-                                        rating = 0f,
-                                        voteCount = 0,
-                                        genreIds = emptyList(),
-                                    )
-                                ),
-                                isLoading = false,
-                                playbackPrep = null
-                            )
-                        }
-                        val recent = RecentItem(picker.contentId, picker.title, "vod", null)
-                        _state.update { it.copy(nowPlaying = recent) }
-                        repository.recentlyWatchedStore.add(recent)
-                        _playEvent.tryEmit(PlayEvent(resolution.url, picker.title, "vod", emptyList(), emptyList()))
+                        handleStreamResolution(resolution, picker.title, picker.contentType, stream)
                     }
                     is StreamResolution.Failed -> {
                         _state.update {
@@ -1078,23 +1080,8 @@ class MainViewModel(
     }
 
     fun dismissStreamPicker() {
-        _state.update {
-            it.copy(
-                content = BrowseContent.TmdbMovieDetail(
-                    TmdbMovie(
-                        id = 0,
-                        title = "",
-                        overview = "",
-                        posterPath = null,
-                        backdropPath = null,
-                        releaseDate = "",
-                        rating = 0f,
-                        voteCount = 0,
-                        genreIds = emptyList(),
-                    )
-                )
-            )
-        }
+        playbackPrepJob?.cancel()
+        goBack()
     }
 
     fun playSelectedTmdbStream(stream: UnifiedTorrent) {
@@ -1113,18 +1100,24 @@ class MainViewModel(
             .distinct()
             .take(5)
         currentPlaybackTitle = selection.title
-        currentContentType = "vod"
+        currentContentType = selection.contentType
         playbackPrepJob?.cancel()
         playbackPrepJob = viewModelScope.launch {
             // Start cancel-button timer concurrently — reveal after 5s
             launch { delay(5_000); _state.update { it.copy(playbackPrep = it.playbackPrep?.copy(canCancel = true)) } }
-            torBoxRepository.resolveSelectedTorrent(stream, currentFallbackHashes).collect { resolution ->
-                handleStreamResolution(resolution, selection.title, "vod", stream)
+            val flow = if (selection.contentType == "episode") {
+                torBoxRepository.resolveSelectedEpisodeTorrent(stream, currentFallbackHashes)
+            } else {
+                torBoxRepository.resolveSelectedTorrent(stream, currentFallbackHashes)
+            }
+            flow.collect { resolution ->
+                handleStreamResolution(resolution, selection.title, selection.contentType, stream)
             }
         }
     }
 
     fun dismissTmdbStreamSelection() {
+        playbackPrepJob?.cancel()
         _state.update { it.copy(tmdbStreamSelection = null) }
     }
 
@@ -1138,15 +1131,39 @@ class MainViewModel(
                     return@launch
                 }
                 val streams = torBoxRepository.fetchEpisodeStreams(imdbId, episode.seasonNumber, episode.episodeNumber)
+                val title = "${show.name} S${episode.seasonNumber}E${episode.episodeNumber} — ${episode.name}"
+                val contentId = "${show.id}:${episode.seasonNumber}:${episode.episodeNumber}"
+
+                val currentContent = _state.value.content
+                val currentScroll = if (currentContent is BrowseContent.TmdbMovies || currentContent is BrowseContent.TmdbShows) {
+                    _state.value.currentGridScrollPosition
+                } else {
+                    0
+                }
+                backStack.add(currentContent to currentScroll)
+
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        tmdbStreamSelection = TmdbStreamSelectionState(
+                        content = BrowseContent.StreamPicker(
+                            title = title,
                             streams = streams,
-                            title = "${show.name} S${episode.seasonNumber}E${episode.episodeNumber} — ${episode.name}",
+                            selectedIndex = 0,
+                            loadingIndex = null,
+                            errorIndex = null,
+                            errorMessage = null,
                             imdbId = imdbId,
                             tmdbId = show.id.toString(),
-                            contentId = "${show.id}:${episode.seasonNumber}:${episode.episodeNumber}",
+                            contentId = contentId,
+                            contentType = "episode"
+                        ),
+                        canGoBack = true,
+                        tmdbStreamSelection = TmdbStreamSelectionState(
+                            streams = streams,
+                            title = title,
+                            imdbId = imdbId,
+                            tmdbId = show.id.toString(),
+                            contentId = contentId,
                             contentType = "episode",
                             show = show,
                             episode = episode
@@ -1154,6 +1171,7 @@ class MainViewModel(
                     )
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to play episode") }
             }
         }
@@ -1310,6 +1328,7 @@ class MainViewModel(
                 val favRefs = buildFavoriteRefsFromCache(excludeId = item.id)
                 _playEvent.tryEmit(PlayEvent(url, item.name, item.type, recentRefs, favRefs))
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to play recent") }
             }
         }
@@ -1429,6 +1448,7 @@ class MainViewModel(
                 val favRefs = buildFavoriteRefsFromCache(excludeId = fav.id)
                 _playEvent.tryEmit(PlayEvent(url, fav.name, fav.type, recentRefs, favRefs))
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to play favorite") }
             }
         }
@@ -1523,6 +1543,7 @@ class MainViewModel(
                 val content = withContext(Dispatchers.IO) { block(creds) }
                 _state.update { it.copy(isLoading = false, content = content, canGoBack = backStack.isNotEmpty()) }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 // Error stays inline — user retries or goes back from current screen.
                 // Only set canGoBack=true if we have somewhere to go back to.
                 _state.update { it.copy(isLoading = false, canGoBack = backStack.isNotEmpty(), error = e.message ?: "Unknown error") }
@@ -1538,6 +1559,7 @@ class MainViewModel(
                 val content = withContext(Dispatchers.IO) { block() }
                 _state.update { it.copy(isLoading = false, isGridLoading = false, content = content, canGoBack = backStack.isNotEmpty()) }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 // Error stays inline — user retries or goes back from current screen.
                 // Only set canGoBack=true if we have somewhere to go back to.
                 _state.update { it.copy(isLoading = false, isGridLoading = false, canGoBack = backStack.isNotEmpty(), error = e.message ?: "Unknown error") }

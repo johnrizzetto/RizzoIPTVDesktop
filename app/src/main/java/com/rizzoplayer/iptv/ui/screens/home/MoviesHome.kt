@@ -1,5 +1,6 @@
 package com.rizzoplayer.iptv.ui.screens.home
 
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -54,6 +55,7 @@ import com.rizzoplayer.iptv.data.model.TmdbMovie
 import com.rizzoplayer.iptv.ui.theme.*
 import com.rizzoplayer.iptv.ui.designsystem.RizzoSkeletonRow
 import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusGroup
+import com.rizzoplayer.iptv.ui.designsystem.rizzoGridTopRowFocus
 import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
@@ -165,12 +167,12 @@ fun MoviesHome(
                             modifier = Modifier
                                 .width(80.dp)
                                 .height(120.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .focusable(interactionSource = posterInteractionSource)
-                                .combinedClickable(
+                                .rizzoFocusable(
+                                    onClick = { hero?.let { onSelectMovie(it) } },
                                     interactionSource = posterInteractionSource,
-                                    indication = null,
-                                    onClick = { hero?.let { onSelectMovie(it) } }
+                                    focusBorderColor = AccentBlue,
+                                    focusBackgroundColor = CardBg,
+                                    shape = RoundedCornerShape(8.dp)
                                 )
                         )
                         Spacer(Modifier.width(14.dp))
@@ -310,7 +312,7 @@ fun TmdbMovieGrid(
             modifier = Modifier
                 .fillMaxSize()
                 .rizzoFocusGroup()
-                .gridTopRowFocus(firstFocus),
+                .rizzoGridTopRowFocus(firstFocus),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -351,27 +353,22 @@ fun TmdbPosterCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isCardFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isCardFocused) 1.06f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "cardScale"
-    )
 
     Box(modifier = modifier) {
         Card(
             modifier = Modifier
                 .width(cardWidth)
                 .align(Alignment.TopCenter)
-                .graphicsLayer { scaleX = scale; scaleY = scale }
-                .focusable(interactionSource = interactionSource)
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                .then(
-                    if (isCardFocused) Modifier.border(4.dp, AccentBlue, RoundedCornerShape(8.dp))
-                    else Modifier
+                .rizzoFocusable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    interactionSource = interactionSource,
+                    focusBorderColor = AccentBlue,
+                    focusBackgroundColor = CardBg,
+                    shape = RoundedCornerShape(8.dp)
                 ),
             shape = RoundedCornerShape(8.dp),
             colors = CardDefaults.cardColors(containerColor = CardBg),
-            elevation = CardDefaults.cardElevation(defaultElevation = if (isCardFocused) 8.dp else 2.dp)
         ) {
             Column {
                 Box {

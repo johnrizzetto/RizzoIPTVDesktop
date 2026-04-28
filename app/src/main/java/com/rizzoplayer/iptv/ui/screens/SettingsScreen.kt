@@ -1,5 +1,6 @@
 package com.rizzoplayer.iptv.ui.screens
 
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -138,15 +139,17 @@ private fun SettingsToggleRow(
     onToggle: (Boolean) -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (isFocused) NavFocusBg else Color.Transparent)
-            .then(if (isFocused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.5f), RoundedCornerShape(8.dp)) else Modifier)
-            .focusable(interactionSource = interactionSource)
-            .clickable { onToggle(!checked) }
+            .rizzoFocusable(
+                onClick = { onToggle(!checked) },
+                interactionSource = interactionSource,
+                shape = RoundedCornerShape(8.dp),
+                focusBorderWidth = 1.dp,
+                focusBorderColor = AccentBlue.copy(alpha = 0.5f),
+                focusBackgroundColor = NavFocusBg
+            )
             .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -182,12 +185,14 @@ private fun SettingsInfoRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (isFocused) NavFocusBg else Color.Transparent)
-            .then(if (isFocused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.5f), RoundedCornerShape(8.dp)) else Modifier)
             .onFocusChanged { if (it.isFocused) onFocus() }
-            .focusable()
-            .clickable(onClick = onClick)
+            .rizzoFocusable(
+                onClick = onClick,
+                shape = RoundedCornerShape(8.dp),
+                focusBorderWidth = 1.dp,
+                focusBorderColor = AccentBlue.copy(alpha = 0.5f),
+                focusBackgroundColor = NavFocusBg
+            )
             .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -209,12 +214,14 @@ private fun SettingsActionRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (isFocused) Color(0xFF2A0A0A) else Color.Transparent)
-            .then(if (isFocused) Modifier.border(1.dp, RedColor.copy(alpha = 0.5f), RoundedCornerShape(8.dp)) else Modifier)
             .onFocusChanged { if (it.isFocused) onFocus() }
-            .focusable()
-            .clickable(onClick = onClick)
+            .rizzoFocusable(
+                onClick = onClick,
+                shape = RoundedCornerShape(8.dp),
+                focusBorderWidth = 1.dp,
+                focusBorderColor = RedColor.copy(alpha = 0.5f),
+                focusBackgroundColor = Color(0xFF2A0A0A)
+            )
             .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically

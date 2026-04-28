@@ -1,5 +1,6 @@
 package com.rizzoplayer.iptv.ui.screens.home
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -185,13 +186,16 @@ private fun StreamPickerRow(
     focusRequester: FocusRequester,
     onFocusChanged: (androidx.compose.ui.focus.FocusState) -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(focusRequester)
                 .onFocusChanged(onFocusChanged)
-                .focusable(),
+                // Row is no longer focusable itself; StreamItemCard handles focus.
+                ,
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -200,10 +204,10 @@ private fun StreamPickerRow(
                 StreamItemCard(
                     stream = stream,
                     metadata = metadata,
-                    isFocused = isFocused,
                     isFailed = isError,
                     failedReason = errorMessage,
                     onSelect = onSelect,
+                    interactionSource = interactionSource,
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(

@@ -1,5 +1,6 @@
 package com.rizzoplayer.iptv.ui.screens.home
 
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -70,14 +71,17 @@ private fun RecentCard(item: RecentItem, store: PlaybackPositionStore, onClick: 
     }
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isFocused) AccentBlue.copy(alpha = 0.25f) else CardBg)
-            .then(if (isFocused) Modifier.border(1.dp, AccentBlue.copy(alpha = 0.6f), RoundedCornerShape(6.dp)) else Modifier)
+            .background(CardBg, RoundedCornerShape(6.dp))
+            .rizzoFocusable(
+                onClick = onClick,
+                interactionSource = interactionSource,
+                shape = RoundedCornerShape(6.dp),
+                focusBorderColor = AccentBlue.copy(alpha = 0.6f),
+                focusBackgroundColor = AccentBlue.copy(alpha = 0.25f)
+            )
     ) {
         Row(
             modifier = Modifier
-                .focusable(interactionSource = interactionSource)
-                .clickable(onClick = onClick)
                 .padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

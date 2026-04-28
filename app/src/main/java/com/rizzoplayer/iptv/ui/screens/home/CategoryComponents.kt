@@ -22,6 +22,8 @@ import com.rizzoplayer.iptv.ui.theme.NavFocusBg
 import com.rizzoplayer.iptv.ui.theme.TextMuted
 import com.rizzoplayer.iptv.ui.theme.TextPrimary
 
+import com.rizzoplayer.iptv.ui.designsystem.rizzoFocusable
+
 @Composable
 fun CategoryRow(
     category: Category,
@@ -33,11 +35,13 @@ fun CategoryRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isFocused) NavFocusBg else androidx.compose.ui.graphics.Color.Transparent)
-            .then(if (isFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
-            .focusable(interactionSource = interactionSource)
-            .clickable(onClick = onSelect)
+            .rizzoFocusable(
+                onClick = onSelect,
+                interactionSource = interactionSource,
+                shape = RoundedCornerShape(6.dp),
+                focusBorderColor = AccentBlue,
+                focusBackgroundColor = NavFocusBg
+            )
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
