@@ -201,6 +201,8 @@ private fun StreamPickerRow(
                     stream = stream,
                     metadata = metadata,
                     isFocused = isFocused,
+                    isFailed = isError,
+                    failedReason = errorMessage,
                     onSelect = onSelect,
                     modifier = Modifier
                         .fillMaxWidth()

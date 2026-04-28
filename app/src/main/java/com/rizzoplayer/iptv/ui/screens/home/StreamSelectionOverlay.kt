@@ -178,6 +178,8 @@ fun StreamItemCard(
     stream: Any,  // UnifiedTorrent or TorrentioStream
     metadata: TorrentioParser.StreamMetadata,
     isFocused: Boolean,
+    isFailed: Boolean,
+    failedReason: String?,
     onSelect: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -191,17 +193,25 @@ fun StreamItemCard(
     val pressed by interactionSource.collectIsPressedAsState()
 
     val cardBg = when {
+        isFailed && pressed -> Color(0xFF2A0A0A)
+        isFailed           -> Color(0xFF1E0808)
         isFocused && pressed -> CardBgFocusedPressed
         isFocused           -> CardBgFocused
         else                -> CardBgDefault
     }
 
-    val borderColor = when (isFocused) {
-        true  -> AccentBlue.copy(alpha = 0.8f)
-        false -> BorderColor.copy(alpha = 0.3f)
+    val borderColor = when {
+        isFailed && isFocused -> Color(0xFFBB3333).copy(alpha = 0.9f)
+        isFailed             -> Color(0xFF992222).copy(alpha = 0.7f)
+        isFocused            -> AccentBlue.copy(alpha = 0.8f)
+        else                 -> BorderColor.copy(alpha = 0.3f)
     }
 
-    val textColor = if (isFocused) Color.White else TextSecondary
+    val textColor = when {
+        isFailed && !isFocused -> Color(0xFFAA7777)
+        isFocused              -> Color.White
+        else                  -> TextSecondary
+    }
     val seedColor = if (isFocused) GreenSeeders else TextMuted.copy(alpha = 0.6f)
 
     Column(
@@ -277,6 +287,27 @@ fun StreamItemCard(
                 }
             }
         }
+
+        // ── Failed row ─────────────────────────────────────────────────────────
+        if (isFailed && failedReason != null) {
+            Spacer(Modifier.height(5.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("✕", fontSize = 11.sp, color = Color(0xFFDD4444))
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = failedReason.take(50),
+                    fontSize = 10.sp,
+                    color = Color(0xFFBB6666),
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
@@ -340,6 +371,8 @@ private fun formatSeeders(n: Int): String = when {
 fun PremiumStreamSelectionOverlay(
     title: String,
     streams: List<UnifiedTorrent>,
+    failedStreamUrl: String?,
+    failedReason: String?,
     onSelect: (UnifiedTorrent) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -464,10 +497,13 @@ fun PremiumStreamSelectionOverlay(
                     key = { _, (stream, _) -> stream.url }
                 ) { idx, (stream, metadata) ->
                     val isFocused = idx == focusedIdx
+                    val isFailed = failedStreamUrl != null && stream.url == failedStreamUrl
                     StreamItemCard(
                         stream = stream,
                         metadata = metadata,
                         isFocused = isFocused,
+                        isFailed = isFailed,
+                        failedReason = if (isFailed) failedReason else null,
                         onSelect = {
                             if (!selectedLocked) {
                                 selectedLocked = true

@@ -55,7 +55,30 @@
 - curl returns HTTP 200 — token is valid
 
 ## Status
-DEVICE TESTING IN PROGRESS — APK installed 2026-04-24 21:35 ET on kasol projector
+
+### v5 — TorBox Stream Selection Bug Fixes (COMPLETED)
+
+**Branch:** `v5/p0-rename-cancellation` (worktree at `/Users/johnrizzetto/v5-p0-phase0`)
+**Commit:** `79d3198`
+
+**Bug #1 — "No streams found" when torrents exist:**
+- Root cause: bare `.await()` calls in `fetchMovieStreams`/`fetchEpisodeStreams` — if either async block threw, the whole coroutineScope collapsed to empty
+- Fix: wrap each `await()` individually in try/catch, log warning, return `emptyList()` — one source's failure no longer poisons the merged result
+
+**Bug #2 — Clicking selected torrent shows premature failure:**
+- Root cause: `playSelectedTmdbStream` called `resolveMovie(imdbId)` which re-searches and picks #1 ranked torrent, ignoring the user's actual selection
+- Fix: new `resolveSelectedTorrent(stream, fallbackHashes)` in TorBoxRepository — plays the explicitly chosen UnifiedTorrent directly, no re-search, passes fallback hashes for retry chain
+
+**Files changed:**
+- `TorBoxRepository.kt`: await() try/catch isolation + `resolveSelectedTorrent()` method
+- `MainViewModel.kt`: `playSelectedTmdbStream` now calls `resolveSelectedTorrent` instead of `resolveMovie`
+
+**Build:** `./gradlew assembleV4Debug` → BUILD SUCCESSFUL
+**ktlint:** BUILD SUCCESSFUL
+
+---
+
+### v4 — Completed
 
 ## IPTV Credentials (Hardcoded)
 - Username: `87bcb5ed3f`

@@ -5,6 +5,7 @@ import com.rizzoplayer.iptv.data.api.TmdbApiService
 import com.rizzoplayer.iptv.data.api.TorrentioService
 import com.rizzoplayer.iptv.data.local.DiskCache
 import com.rizzoplayer.iptv.data.model.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.SupervisorJob
@@ -68,6 +69,7 @@ class TmdbRepository(
             }
             result
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emptyList()
         }
     }
@@ -89,6 +91,7 @@ class TmdbRepository(
             diskCache.put(key, text)
             result
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             null
         }
     }
@@ -302,7 +305,10 @@ class TmdbRepository(
             val text = withContext(Dispatchers.Default) { json.encodeToString(result) }
             diskCache.put(key, text)
             result
-        } catch (e: Exception) { emptyList() }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            emptyList()
+        }
     }
 
     suspend fun getMovieStreams(imdbId: String): List<TorrentioStream> {
