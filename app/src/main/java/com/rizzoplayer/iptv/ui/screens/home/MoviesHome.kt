@@ -434,27 +434,7 @@ fun TmdbPosterCard(
             }
         }
 
-        // Expanded info on focus
-        if (isCardFocused && overview.isNotEmpty()) {
-            Card(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth(0.95f)
-                    .offset(y = 4.dp)
-                    .border(1.dp, AccentBlue.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = CardFocused.copy(alpha = 0.95f)),
-            ) {
-                Text(
-                    overview,
-                    fontSize = 10.sp,
-                    color = TextPrimary.copy(alpha = 0.85f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(8.dp)
-                )
-            }
-        }
+
     }
 }
 

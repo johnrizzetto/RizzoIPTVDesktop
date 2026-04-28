@@ -314,28 +314,30 @@ private fun MoviesContent(
             onReload = viewModel::retryReload
         )
         q.isNotEmpty() -> {
-            val detail = state.content as? BrowseContent.TmdbMovieDetail
-            if (detail != null) {
-                TmdbMovieDetailView(
-                    movie = detail.movie,
-                    isFavorite = favorites.containsKey(detail.movie.id.toString()),
-                    onPlay = { viewModel.onPlayTmdbMovie(detail.movie) },
+            when (val content = state.content) {
+                is BrowseContent.StreamPicker -> StreamPickerScreen(
+                    state = content,
+                    onSelectStream = { stream, idx -> viewModel.selectStreamInPicker(stream, idx) },
+                    onBack = viewModel::goBack,
+                )
+                is BrowseContent.TmdbMovieDetail -> TmdbMovieDetailView(
+                    movie = content.movie,
+                    isFavorite = favorites.containsKey(content.movie.id.toString()),
+                    onPlay = { viewModel.onPlayTmdbMovie(content.movie) },
                     onToggleFavorite = {
                         viewModel.toggleFavorite(
-                            id   = detail.movie.id.toString(),
-                            name = detail.movie.title,
+                            id   = content.movie.id.toString(),
+                            name = content.movie.title,
                             type = "tmdb_movie",
-                            icon = detail.movie.posterPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
+                            icon = content.movie.posterPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
                         )
                     },
                     viewModel = viewModel
                 )
-            } else {
-                val searchContent = state.content as? BrowseContent.TmdbSearchResults
-                if (searchContent != null && searchContent.query.equals(q, ignoreCase = true)) {
-                    if (searchContent.movies.isNotEmpty()) {
+                is BrowseContent.TmdbSearchResults -> {
+                    if (content.movies.isNotEmpty()) {
                         TmdbSearchResultsContent(
-                            content = searchContent,
+                            content = content,
                             favorites = favorites,
                             viewModel = viewModel,
                             filter = "movies",
@@ -346,10 +348,10 @@ private fun MoviesContent(
                     } else {
                         EmptyHint("No movies found")
                     }
-                } else if (state.isSearchLoading) {
-                    LoadingView()
-                } else {
-                    EmptyHint("Type at least 2 characters")
+                }
+                else -> {
+                    if (state.isSearchLoading) LoadingView()
+                    else EmptyHint("Type at least 2 characters")
                 }
             }
         }
