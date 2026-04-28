@@ -56,25 +56,25 @@
 
 ## Status
 
-### v5 — TorBox Stream Selection Bug Fixes (IN PROGRESS)
+### v5 — TorBox Stream Selection Bug Fixes (COMPLETED)
 
 **Branch:** `v5/p0-rename-cancellation` (worktree at `/Users/johnrizzetto/v5-p0-phase0`)
+**Commit:** `79d3198`
 
-**Two bugs reported by user:**
-1. "No streams found" even when torrents exist
-2. Clicking a torrent link shows premature failure instead of loading steps to TorBox
+**Bug #1 — "No streams found" when torrents exist:**
+- Root cause: bare `.await()` calls in `fetchMovieStreams`/`fetchEpisodeStreams` — if either async block threw, the whole coroutineScope collapsed to empty
+- Fix: wrap each `await()` individually in try/catch, log warning, return `emptyList()` — one source's failure no longer poisons the merged result
 
-**Bug #1 root cause (identified):** `fetchMovieStreams` (TorBoxRepository.kt ~line 123) wraps the entire `coroutineScope` in a single try/catch. The individual source fetch functions (`fetchTorBoxSearchMovies`, `fetchTorrentioMovies`) each have their own try/catch returning `emptyList()` on failure — but if the outer coroutineScope itself throws (e.g., a crash in the scope launch aggregation), the whole thing returns empty. Need to read exact `fetchMovieStreams` code.
+**Bug #2 — Clicking selected torrent shows premature failure:**
+- Root cause: `playSelectedTmdbStream` called `resolveMovie(imdbId)` which re-searches and picks #1 ranked torrent, ignoring the user's actual selection
+- Fix: new `resolveSelectedTorrent(stream, fallbackHashes)` in TorBoxRepository — plays the explicitly chosen UnifiedTorrent directly, no re-search, passes fallback hashes for retry chain
 
-**Bug #2 root cause (identified):** `playSelectedTmdbStream` (MainViewModel.kt ~line 839) calls `torBoxRepository.resolveMovie(selection.imdbId)` which does a **fresh search** and picks the #1 ranked torrent — completely ignoring the `UnifiedTorrent stream: UnifiedTorrent` the user actually selected. Same in `onPlayTmdbEpisode` (~line 902) calling `resolveEpisode`.
+**Files changed:**
+- `TorBoxRepository.kt`: await() try/catch isolation + `resolveSelectedTorrent()` method
+- `MainViewModel.kt`: `playSelectedTmdbStream` now calls `resolveSelectedTorrent` instead of `resolveMovie`
 
-**Fix plan for Bug #2:** Add `addMagnetDirect(magnetUrl: String)` in TorBoxRepository that bypasses search and directly calls `addMagnet`. Use it in `playSelectedTmdbStream` with the user's selected `stream.url`. `resolveFallback` (line 326) is the correct pattern reference.
-
-**Full context:** Saved in `BUG_FIX_PROGRESS.md` at repo root.
-
-**Build:** `./gradlew assembleV5Debug`
-
-**Installed:** `com.rizzoplayer.iptv.v5`
+**Build:** `./gradlew assembleV4Debug` → BUILD SUCCESSFUL
+**ktlint:** BUILD SUCCESSFUL
 
 ---
 

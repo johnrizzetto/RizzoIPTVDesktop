@@ -30,3 +30,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [3.0.0] — Prior Version
 
 See `claude/romantic-leakey-57e175-work` branch history for v3 changelog.
+
+## [4.0.0-alpha.1] — v4/v5 Worktree Branch
+
+### Fixed
+- **Bug #1 — "No streams found" when torrents exist:** `fetchMovieStreams`/`fetchEpisodeStreams` now wrap each `await()` individually in try/catch so one source's exception doesn't poison the merged result.
+- **Bug #2 — Clicking selected torrent shows premature failure:** `playSelectedTmdbStream` now calls new `resolveSelectedTorrent(stream, fallbackHashes)` which uses the explicitly chosen torrent directly instead of re-searching and picking #1.
