@@ -59,19 +59,25 @@
 ### v5 — TorBox Stream Selection Bug Fixes (COMPLETED)
 
 **Branch:** `v5/p0-rename-cancellation` (worktree at `/Users/johnrizzetto/v5-p0-phase0`)
-**Commit:** `79d3198`
+**Latest commit:** `94e4cbc` (parent: `cb3cc05`)
 
-**Bug #1 — "No streams found" when torrents exist:**
-- Root cause: bare `.await()` calls in `fetchMovieStreams`/`fetchEpisodeStreams` — if either async block threw, the whole coroutineScope collapsed to empty
-- Fix: wrap each `await()` individually in try/catch, log warning, return `emptyList()` — one source's failure no longer poisons the merged result
+**Bug #1 — "No valid torrent hash found" for ALL torrents:**
+- Root cause: `TorBoxApiService.addMagnet()` posted form param `"magnet"` but TorBox API expects `"magnet_uri"`
+- Fix: changed `.addFormDataPart("magnet", magnet)` → `.addFormDataPart("magnet_uri", magnet)` in `TorBoxApiService.kt`
+- Impact: ALL torrents were being rejected regardless of validity
 
-**Bug #2 — Clicking selected torrent shows premature failure:**
-- Root cause: `playSelectedTmdbStream` called `resolveMovie(imdbId)` which re-searches and picks #1 ranked torrent, ignoring the user's actual selection
-- Fix: new `resolveSelectedTorrent(stream, fallbackHashes)` in TorBoxRepository — plays the explicitly chosen UnifiedTorrent directly, no re-search, passes fallback hashes for retry chain
+**Bug #2 — selectStreamInPicker ignored user's torrent selection:**
+- Root cause: `selectStreamInPicker` called `torBoxRepository.resolveMovie(picker.imdbId)` — fresh search picking ranked #1, ignoring user's selection
+- Fix: replaced with `torBoxRepository.resolveSelectedTorrent(stream, currentFallbackHashes).collect { handleStreamResolution(...) }`
+- Now respects the `stream` (UnifiedTorrent) the user actually selected in StreamPickerScreen
+
+**Bug #3 — "No streams found" when either source throws (prior session):**
+- Root cause: bare `.await()` calls in `fetchMovieStreams`/`fetchEpisodeStreams`
+- Fix: individual try/catch per await, one source's failure no longer poisons merged result
 
 **Files changed:**
-- `TorBoxRepository.kt`: await() try/catch isolation + `resolveSelectedTorrent()` method
-- `MainViewModel.kt`: `playSelectedTmdbStream` now calls `resolveSelectedTorrent` instead of `resolveMovie`
+- `TorBoxApiService.kt`: addMagnet param `magnet_uri`
+- `MainViewModel.kt`: selectStreamInPicker now uses resolveSelectedTorrent
 
 **Build:** `./gradlew assembleV4Debug` → BUILD SUCCESSFUL
 **ktlint:** BUILD SUCCESSFUL
