@@ -60,7 +60,7 @@ object RizzoMotion {
 
     // ── Focus scale constants (mirrors TvFocus.kt) ───────────────────────────
 
-    const val FocusScale = 1.06f
+    const val FocusScale = 1.04f
     const val PressScale = 0.95f
 }
 

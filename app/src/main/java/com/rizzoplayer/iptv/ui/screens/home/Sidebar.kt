@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -56,6 +57,7 @@ fun Sidebar(
     onLogout: () -> Unit,
     onSelectSection: (String) -> Unit,
     initialSidebarFocus: FocusRequester,
+    contentFocusTarget: FocusRequester? = null,
 ) {
     var showLogoutDialog by remember { mutableStateOf(false) }
 
@@ -75,6 +77,10 @@ fun Sidebar(
             .fillMaxHeight()
             .background(SidebarBg)
             .onFocusChanged { if (it.hasFocus) onFocusEnter() else onFocusExit() }
+            .then(
+                if (contentFocusTarget != null) Modifier.focusProperties { right = contentFocusTarget }
+                else Modifier
+            )
             .padding(vertical = 16.dp, horizontal = 4.dp),
         horizontalAlignment = if (expanded) Alignment.Start else Alignment.CenterHorizontally
     ) {

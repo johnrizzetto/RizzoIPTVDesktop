@@ -40,8 +40,8 @@ val RizzoAccentDark = RizzoIndigoDark
  * Accent with 14% alpha — used for focus tint background on cards.
  * Matches the old AccentBlue.copy(alpha=0.14f) pattern.
  */
-val RizzoAccentTint = RizzoIndigo.copy(alpha = 0.14f)
-val RizzoAccentGlow = RizzoIndigo.copy(alpha = 0.35f)
+val RizzoAccentTint = RizzoIndigo.copy(alpha = 0.08f)
+val RizzoAccentGlow = RizzoIndigo.copy(alpha = 0.20f)
 
 // ── Semantic ──────────────────────────────────────────────────────────────────
 

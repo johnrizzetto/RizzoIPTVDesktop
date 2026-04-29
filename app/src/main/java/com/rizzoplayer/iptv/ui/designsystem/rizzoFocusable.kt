@@ -73,7 +73,7 @@ fun Modifier.rizzoFocusable(
             shape = shape,
         )
         .then(
-            if (isFocused) Modifier.border(focusBorderWidth, focusBorderColor, shape)
+            if (isFocused) Modifier.border(focusBorderWidth, focusBorderColor.copy(alpha = 0.6f), shape)
             else Modifier,
         )
         .combinedClickable(

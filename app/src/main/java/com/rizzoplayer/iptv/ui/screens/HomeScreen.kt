@@ -87,6 +87,8 @@ fun HomeScreen(viewModel: MainViewModel) {
 
     // Focus requester for the NavHost content area — sidebar pushes focus here on nav
     val contentFocusRestorer = remember { FocusRequester() }
+    // Focus requester for the SearchBar — grids route Up here from their top row
+    val searchBarFocus = remember { FocusRequester() }
     // Phase 3: Replace tick system (focusContentTick) with FocusManager boolean flag.
     // The tick system had a race: onFocusChanged in outer Box fired on every child focus
     // event, making focus unpredictable. FocusManager fires exactly once per sidebar click.
@@ -137,6 +139,7 @@ fun HomeScreen(viewModel: MainViewModel) {
             onBack = viewModel::goBack,
             onLogout = viewModel::logout,
             initialSidebarFocus = sidebarInitialFocus,
+            contentFocusTarget = contentFocusRestorer,
         )
 
         // ── NavHost column ──────────────────────────────────────────────────
@@ -159,6 +162,7 @@ fun HomeScreen(viewModel: MainViewModel) {
                 onQueryChange = viewModel::setSearchQuery,
                 onClear = { viewModel.setSearchQuery("") },
                 onVoiceResult = { viewModel.setSearchQuery(it) },
+                focusRequester = searchBarFocus,
                 downTarget = contentFocusRestorer
             )
 
@@ -176,6 +180,7 @@ fun HomeScreen(viewModel: MainViewModel) {
                     .weight(1f)
                     .fillMaxHeight()
                     .focusRequester(contentFocusRestorer)
+                    .focusProperties { up = searchBarFocus }
                     .focusGroup()
             ) {
                 NavHost(
