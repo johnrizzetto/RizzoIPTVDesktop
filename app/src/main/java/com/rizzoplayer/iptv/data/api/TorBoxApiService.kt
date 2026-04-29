@@ -53,11 +53,13 @@ class TorBoxApiService(context: Context) {
     }
 
     // POST /v1/api/torrents/createtorrent — multipart form
+    // NOTE: API parameter is "magnet_uri", not "magnet" — using wrong param name causes
+    // "No valid torrent hash found" error for ALL torrents regardless of validity.
     suspend fun addMagnet(magnet: String): TorBoxAddResult = withContext(Dispatchers.IO) {
         val url = "$baseUrl/api/torrents/createtorrent"
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
-            .addFormDataPart("magnet", magnet)
+            .addFormDataPart("magnet_uri", magnet)
             .addFormDataPart("seed", "1")
             .addFormDataPart("allow_zip", "false")
             .build()

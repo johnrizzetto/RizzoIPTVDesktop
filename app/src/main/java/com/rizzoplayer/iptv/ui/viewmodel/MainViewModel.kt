@@ -998,82 +998,10 @@ class MainViewModel(
         currentContentType = "vod"
         playbackPrepJob?.cancel()
         playbackPrepJob = viewModelScope.launch {
-            torBoxRepository.resolveMovie(picker.imdbId).collect { resolution ->
-                when (resolution) {
-                    is StreamResolution.Searching -> {
-                        _state.update { it.copy(
-                            playbackPrep = PlaybackPrep(picker.title, PlaybackPrep.Stage.SEARCHING, "Searching torrent...")
-                        ) }
-                    }
-                    is StreamResolution.Queuing -> {
-                        _state.update { it.copy(
-                            playbackPrep = PlaybackPrep(picker.title, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")
-                        ) }
-                    }
-                    is StreamResolution.Caching -> {
-                        _state.update { it.copy(
-                            content = (it.content as? BrowseContent.StreamPicker)?.copy(loadingIndex = index)
-                                ?: it.content,
-                            playbackPrep = PlaybackPrep(picker.title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")
-                        ) }
-                    }
-                    is StreamResolution.TryingNextStream -> {
-                        val nextIdx = resolution.attempt - 1
-                        val total = resolution.total
-                        _state.update {
-                            it.copy(
-                                content = (it.content as? BrowseContent.StreamPicker)?.copy(
-                                    loadingIndex = nextIdx.coerceIn(0, picker.streams.lastIndex)
-                                ) ?: it.content,
-                                lastPlaybackStreamIndex = nextIdx,
-                                playbackPrep = PlaybackPrep(
-                                    picker.title,
-                                    PlaybackPrep.Stage.CACHING,
-                                    "Stream ${resolution.attempt}/$total unavailable, trying next..."
-                                )
-                            )
-                        }
-                    }
-                    is StreamResolution.Ready -> {
-                        _state.update {
-                            it.copy(
-                                content = BrowseContent.TmdbMovieDetail(
-                                    TmdbMovie(
-                                        id = picker.tmdbId.toIntOrNull() ?: 0,
-                                        title = picker.title,
-                                        overview = "",
-                                        posterPath = null,
-                                        backdropPath = null,
-                                        releaseDate = "",
-                                        rating = 0f,
-                                        voteCount = 0,
-                                        genreIds = emptyList(),
-                                    )
-                                ),
-                                isLoading = false,
-                                playbackPrep = null
-                            )
-                        }
-                        val recent = RecentItem(picker.contentId, picker.title, "vod", null)
-                        _state.update { it.copy(nowPlaying = recent) }
-                        repository.recentlyWatchedStore.add(recent)
-                        _playEvent.tryEmit(PlayEvent(resolution.url, picker.title, "vod", emptyList(), emptyList()))
-                    }
-                    is StreamResolution.Failed -> {
-                        _state.update {
-                            it.copy(
-                                content = (it.content as? BrowseContent.StreamPicker)?.copy(
-                                    loadingIndex = null,
-                                    errorIndex = index,
-                                    errorMessage = resolution.reason,
-                                ) ?: it.content,
-                                isLoading = false,
-                                playbackPrep = null,
-                            )
-                        }
-                    }
+                launch { delay(5_000); _state.update { it.copy(playbackPrep = it.playbackPrep?.copy(canCancel = true)) } }
+                torBoxRepository.resolveSelectedTorrent(stream, currentFallbackHashes).collect { resolution ->
+                    handleStreamResolution(resolution, picker.title, "vod", stream)
                 }
-            }
         }
     }
 
