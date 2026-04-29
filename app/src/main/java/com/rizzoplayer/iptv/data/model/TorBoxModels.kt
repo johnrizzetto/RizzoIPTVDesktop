@@ -18,9 +18,9 @@ data class TorBoxAddResult(
         val d = data ?: return null
         if (d is JsonObject) {
             val tid = d["torrent_id"]
-            if (tid is JsonPrimitive && tid.isString) return tid.content.toIntOrNull()
+            if (tid is JsonPrimitive) return tid.content.toIntOrNull()
             val i = d["id"]
-            if (i is JsonPrimitive && i.isString) return i.content.toIntOrNull()
+            if (i is JsonPrimitive) return i.content.toIntOrNull()
         }
         return null
     }
@@ -57,6 +57,6 @@ data class TorBoxTorrent(
     val cached: Boolean = false,
     val files: List<TorBoxFile> = emptyList()
 ) {
-    val isCompleted: Boolean get() = downloadFinished || downloadState == "cached" || cached
+    val isCompleted: Boolean get() = downloadFinished || downloadState == "cached" || cached || downloadState == "completed" || downloadState == "seeding" || progress >= 1.0 || progress >= 100.0
     val percentDone: Double get() = progress.coerceIn(0.0, 1.0)
 }

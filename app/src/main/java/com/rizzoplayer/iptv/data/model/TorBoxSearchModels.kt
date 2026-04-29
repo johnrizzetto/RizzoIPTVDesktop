@@ -2,6 +2,7 @@ package com.rizzoplayer.iptv.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 /**
  * Response from TorBox Search API (search-api.torbox.app)
@@ -42,7 +43,7 @@ data class TorBoxSearchTorrent(
     val tvdb: String? = null,
     @SerialName("file_id")
     val fileId: Int? = null,
-    val files: List<TorBoxSearchFile>? = null
+    val files: JsonElement? = null
 )
 
 @Serializable

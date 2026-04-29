@@ -67,6 +67,7 @@ object TorrentioParser {
     enum class VideoTechBadge { TECH_DV, TECH_HDR10PLUS, TECH_HDR }
 
     fun parse(stream: TorrentioStream): StreamMetadata {
+        // Combined text for parsing tags
         val combined = "${stream.title} ${stream.name}"
 
         val resolution = detectResolution(combined)
@@ -87,7 +88,6 @@ object TorrentioParser {
     }
 
     fun parse(torrent: UnifiedTorrent): StreamMetadata {
-        // UnifiedTorrent has title, url (magnet), no separate name field — derive name from title
         val combined = torrent.title
         val resolution = detectResolution(combined)
         val videoTech  = detectVideoTech(combined, resolution)
@@ -107,21 +107,33 @@ object TorrentioParser {
     }
 
     private fun detectResolution(text: String): ResolutionBadge? {
-        val upper = text.uppercase()
+        val lower = text.lowercase()
         return when {
-            Regex("""\b(2160|4K)\b""").containsMatchIn(upper) -> ResolutionBadge.RES_4K
-            Regex("""\b1080P?\b""").containsMatchIn(text)             -> ResolutionBadge.RES_1080P
-            Regex("""\b720P?\b""").containsMatchIn(text)              -> ResolutionBadge.RES_720P
-            Regex("""\b480P?\b""").containsMatchIn(text)              -> ResolutionBadge.SD
+            RE_RESOLUTION_4K.containsMatchIn(lower) -> ResolutionBadge.RES_4K
+            RE_RESOLUTION_1080.containsMatchIn(lower) -> {
+                val res = RE_RESOLUTION_1080.find(lower)?.groupValues?.get(1) ?: ""
+                when {
+                    res.contains("1080") -> ResolutionBadge.RES_1080P
+                    res.contains("720") -> ResolutionBadge.RES_720P
+                    res.contains("480") -> ResolutionBadge.SD
+                    else -> null
+                }
+            }
+            // Fallback for cases without 'p'
+            lower.contains("2160") || lower.contains("4k") -> ResolutionBadge.RES_4K
+            lower.contains("1080") -> ResolutionBadge.RES_1080P
+            lower.contains("720") -> ResolutionBadge.RES_720P
+            lower.contains("480") -> ResolutionBadge.SD
             else -> null
         }
     }
 
     private fun detectVideoTech(text: String, @Suppress("UNUSED_PARAMETER") res: ResolutionBadge?): VideoTechBadge? {
+        val lower = text.lowercase()
         return when {
-            RE_DV.containsMatchIn(text)             -> VideoTechBadge.TECH_DV
-            RE_HDR10PLUS.containsMatchIn(text.uppercase()) -> VideoTechBadge.TECH_HDR10PLUS
-            RE_HDR_GENERIC.containsMatchIn(text)    -> VideoTechBadge.TECH_HDR
+            RE_DV.containsMatchIn(lower) || lower.contains("dv") || lower.contains("dolby vision") -> VideoTechBadge.TECH_DV
+            RE_HDR10PLUS.containsMatchIn(lower) || lower.contains("hdr10+") || lower.contains("hdr 10+") -> VideoTechBadge.TECH_HDR10PLUS
+            RE_HDR_GENERIC.containsMatchIn(lower) || lower.contains("hdr") -> VideoTechBadge.TECH_HDR
             else -> null
         }
     }
@@ -364,8 +376,6 @@ fun PremiumStreamSelectionOverlay(
     onSelect: (UnifiedTorrent) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // Debounce: guard against rapid D-pad mashing firing multiple onSelect calls
-    var selectedLocked by remember { mutableStateOf(false) }
     val parsedStreams = remember(streams) { streams.map { s -> s to TorrentioParser.parse(s) } }
 
     var focusedIdx by remember { mutableIntStateOf(0) }
@@ -492,10 +502,7 @@ fun PremiumStreamSelectionOverlay(
                         isFailed = isFailed,
                         failedReason = if (isFailed) failedReason else null,
                         onSelect = {
-                            if (!selectedLocked) {
-                                selectedLocked = true
-                                onSelect(stream)
-                            }
+                            onSelect(stream)
                         },
                         modifier = Modifier
                             .focusRequester(if (idx == 0) firstItemFocus else FocusRequester())

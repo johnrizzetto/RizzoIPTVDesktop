@@ -54,6 +54,8 @@ fun SearchBar(
         }
     }
 
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -83,6 +85,12 @@ fun SearchBar(
             textStyle = TextStyle(color = TextPrimary, fontSize = 13.sp),
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                onSearch = {
+                    keyboardController?.hide()
+                    try { downTarget?.requestFocus() } catch (e: Exception) { /* Ignore focus race conditions */ }
+                }
+            ),
             cursorBrush = SolidColor(AccentBlue),
             modifier = Modifier.weight(1f),
         )

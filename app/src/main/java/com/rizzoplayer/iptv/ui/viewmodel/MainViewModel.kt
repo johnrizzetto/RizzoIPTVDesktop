@@ -75,7 +75,8 @@ data class PlaybackPrep(
     val title: String,
     val stage: Stage,
     val message: String,
-    val canCancel: Boolean = false
+    val canCancel: Boolean = false,
+    val progress: Int? = null
 ) {
     enum class Stage { SEARCHING, QUEUING, CACHING, READY, FAILED }
 }
@@ -288,7 +289,7 @@ class MainViewModel(
                             _state.update { it.copy(playbackPrep = PlaybackPrep(currentPlaybackTitle, PlaybackPrep.Stage.QUEUING, "Queuing fallback...")) }
                         }
                         is StreamResolution.Caching -> {
-                            _state.update { it.copy(playbackPrep = PlaybackPrep(currentPlaybackTitle, PlaybackPrep.Stage.CACHING, "Caching fallback ${resolution.percent}%")) }
+                            _state.update { it.copy(playbackPrep = PlaybackPrep(currentPlaybackTitle, PlaybackPrep.Stage.CACHING, "Caching fallback ${resolution.percent}%", progress = resolution.percent)) }
                         }
                         is StreamResolution.TryingNextStream -> {
                             // Fallback resolves one hash at a time; next stream attempt is handled by onPlaybackError loop
@@ -411,6 +412,9 @@ class MainViewModel(
                     .distinctUntilChanged()
                     .collect { rawQuery ->
                         searchJob?.cancel()
+                        val currentSection = _state.value.section
+                        if (currentSection == Section.LIVE || currentSection == Section.FAVORITES) return@collect
+                        
                         val query = rawQuery.trim()
                         if (query.length < 2) {
                             _state.update {
@@ -833,7 +837,7 @@ class MainViewModel(
                 _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")) }
             }
             is StreamResolution.Caching -> {
-                _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
+                _state.update { it.copy(playbackPrep = PlaybackPrep(title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%", progress = resolution.percent)) }
             }
             is StreamResolution.TryingNextStream -> {
                 val nextIdx = resolution.attempt - 1
@@ -1038,7 +1042,7 @@ class MainViewModel(
                         _state.update { it.copy(
                             content = (it.content as? BrowseContent.StreamPicker)?.copy(loadingIndex = index)
                                 ?: it.content,
-                            playbackPrep = PlaybackPrep(picker.title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")
+                            playbackPrep = PlaybackPrep(picker.title, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%", progress = resolution.percent)
                         ) }
                     }
                     is StreamResolution.TryingNextStream -> {
@@ -1233,7 +1237,7 @@ class MainViewModel(
                                     _state.update { it.copy(playbackPrep = PlaybackPrep(item.name, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")) }
                                 }
                                 is StreamResolution.Caching -> {
-                                    _state.update { it.copy(playbackPrep = PlaybackPrep(item.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
+                                    _state.update { it.copy(playbackPrep = PlaybackPrep(item.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%", progress = resolution.percent)) }
                                 }
                                 is StreamResolution.TryingNextStream -> {
                                     _state.update {
@@ -1283,7 +1287,7 @@ class MainViewModel(
                                     _state.update { it.copy(playbackPrep = PlaybackPrep(item.name, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")) }
                                 }
                                 is StreamResolution.Caching -> {
-                                    _state.update { it.copy(playbackPrep = PlaybackPrep(item.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
+                                    _state.update { it.copy(playbackPrep = PlaybackPrep(item.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%", progress = resolution.percent)) }
                                 }
                                 is StreamResolution.TryingNextStream -> {
                                     _state.update {
@@ -1354,7 +1358,7 @@ class MainViewModel(
                                     _state.update { it.copy(playbackPrep = PlaybackPrep(fav.name, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")) }
                                 }
                                 is StreamResolution.Caching -> {
-                                    _state.update { it.copy(playbackPrep = PlaybackPrep(fav.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
+                                    _state.update { it.copy(playbackPrep = PlaybackPrep(fav.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%", progress = resolution.percent)) }
                                 }
                                 is StreamResolution.TryingNextStream -> {
                                     _state.update {
@@ -1404,7 +1408,7 @@ class MainViewModel(
                                     _state.update { it.copy(playbackPrep = PlaybackPrep(fav.name, PlaybackPrep.Stage.QUEUING, "Queuing torrent...")) }
                                 }
                                 is StreamResolution.Caching -> {
-                                    _state.update { it.copy(playbackPrep = PlaybackPrep(fav.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%")) }
+                                    _state.update { it.copy(playbackPrep = PlaybackPrep(fav.name, PlaybackPrep.Stage.CACHING, "Caching ${resolution.percent}%", progress = resolution.percent)) }
                                 }
                                 is StreamResolution.TryingNextStream -> {
                                     _state.update {

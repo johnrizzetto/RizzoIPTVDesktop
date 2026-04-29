@@ -35,8 +35,6 @@ fun StreamPickerScreen(
     onSelectStream: (UnifiedTorrent, Int) -> Unit,
     onBack: () -> Unit,
 ) {
-    // Debounce: guard against rapid D-pad mashing firing multiple onSelect calls
-    var selectedLocked by remember { mutableStateOf(false) }
     val parsedStreams = remember(state.streams) { state.streams.map { s -> s to TorrentioParser.parse(s) } }
 
     var focusedIdx by remember { mutableIntStateOf(0) }
@@ -160,10 +158,7 @@ fun StreamPickerScreen(
                         isError = isError,
                         errorMessage = errorMsg,
                         onSelect = {
-                            if (!selectedLocked) {
-                                selectedLocked = true
-                                onSelectStream(stream, idx)
-                            }
+                            onSelectStream(stream, idx)
                         },
                         focusRequester = if (idx == 0) firstItemFocus else FocusRequester(),
                         onFocusChanged = { if (it.isFocused) focusedIdx = idx },

@@ -739,12 +739,12 @@ fun PlaybackPrepOverlay(
 
     val isFailed = prep.stage == com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep.Stage.FAILED
 
-    LaunchedEffect(isFailed) {
+    LaunchedEffect(isFailed, prep.canCancel) {
         if (isFailed) {
             kotlinx.coroutines.delay(100)
-            retryFocus.requestFocus()
-        } else {
-            cancelFocus.requestFocus()
+            try { retryFocus.requestFocus() } catch (_: Exception) {}
+        } else if (prep.canCancel) {
+            try { cancelFocus.requestFocus() } catch (_: Exception) {}
         }
     }
 
@@ -806,6 +806,15 @@ fun PlaybackPrepOverlay(
                 },
                 fontSize = 11.sp
             )
+            if (prep.stage == com.rizzoplayer.iptv.ui.viewmodel.PlaybackPrep.Stage.CACHING && prep.progress != null) {
+                Spacer(Modifier.height(12.dp))
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = { prep.progress / 100f },
+                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                    color = AccentBlue,
+                    trackColor = Color.White.copy(alpha = 0.1f)
+                )
+            }
             Spacer(Modifier.height(24.dp))
 
             if (isFailed) {

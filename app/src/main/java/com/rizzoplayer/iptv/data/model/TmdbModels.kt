@@ -90,6 +90,8 @@ data class TmdbPage<T>(
 @Immutable
 @Serializable
 data class TorrentioStream(
+    @SerialName("infoHash") val infoHash: String? = null,
+    @SerialName("fileIdx") val fileIdx: Int? = null,
     val url: String = "",
     val title: String = "",
     val name: String = ""

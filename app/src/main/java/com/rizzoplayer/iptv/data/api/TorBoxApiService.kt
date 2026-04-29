@@ -8,7 +8,7 @@ import com.rizzoplayer.iptv.data.model.TorBoxTorrent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.Request
@@ -70,28 +70,17 @@ class TorBoxApiService(context: Context) {
     }
 
     // GET /v1/api/torrents/mylist?bypass_cache=true
-    // API returns download_finished/cached as strings "true"/"false"
     suspend fun getTorrentInfo(torrentId: Int): TorBoxTorrent? = withContext(Dispatchers.IO) {
         val text = get("$baseUrl/api/torrents/mylist?bypass_cache=true")
         Log.d("TorBoxApi", "mylist response: $text")
         try {
-            val root = json.decodeFromString<Map<String, Any>>(text)
-            val data = (root["data"] as? List<*>) ?: return@withContext null
-            val torrentMap = data.filterIsInstance<Map<String, Any>>()
-                .find { (it["id"] as? Number)?.toInt() == torrentId }
+            val root = json.decodeFromString<JsonObject>(text)
+            val data = root["data"] as? JsonArray ?: return@withContext null
+            val torrentObj = data.filterIsInstance<JsonObject>()
+                .find { (it["id"] as? JsonPrimitive)?.intOrNull == torrentId }
                 ?: return@withContext null
-            // Manually map to TorBoxTorrent, handling bool strings
-            TorBoxTorrent(
-                torrentId = (torrentMap["id"] as? Number)?.toInt() ?: 0,
-                name = torrentMap["name"] as? String ?: "",
-                hash = torrentMap["hash"] as? String ?: "",
-                size = (torrentMap["size"] as? Number)?.toLong() ?: 0L,
-                progress = (torrentMap["progress"] as? Number)?.toDouble() ?: 0.0,
-                downloadFinished = (torrentMap["download_finished"] as? String) == "true",
-                downloadState = torrentMap["download_state"] as? String ?: "",
-                cached = (torrentMap["cached"] as? String) == "true",
-                files = emptyList()
-            )
+            
+            json.decodeFromJsonElement<TorBoxTorrent>(torrentObj)
         } catch (e: Exception) {
             Log.e("TorBoxApi", "getTorrentInfo parse error: $e, raw: $text")
             null
@@ -102,8 +91,8 @@ class TorBoxApiService(context: Context) {
     suspend fun requestDownloadLink(torrentId: Int, fileId: Int): String? = withContext(Dispatchers.IO) {
         val text = get("$baseUrl/api/torrents/requestdl?token=$apiToken&torrent_id=$torrentId&file_id=$fileId")
         try {
-            val resp = json.decodeFromString<Map<String, Any>>(text)
-            (resp["data"] as? String)?.takeIf { it.startsWith("http") }
+            val resp = json.decodeFromString<JsonObject>(text)
+            (resp["data"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.startsWith("http") }
         } catch (e: Exception) {
             Log.e("TorBoxApi", "requestDownloadLink parse error: $e, raw: $text")
             null
@@ -117,10 +106,11 @@ class TorBoxApiService(context: Context) {
         val text = get("$baseUrl/api/torrents/checkcached?hash=$param&format=object")
         Log.d("TorBoxApi", "checkCached response: $text")
         try {
-            val root = json.decodeFromString<Map<String, Any>>(text)
-            val data = root["data"] as? Map<*, *> ?: return@withContext emptyMap()
+            val root = json.decodeFromString<JsonObject>(text)
+            val data = root["data"] as? JsonObject ?: return@withContext emptyMap()
             hashes.associateWith { h ->
-                data.containsKey(h.lowercase()) || data.containsKey(h)
+                val entry = data[h.lowercase()] ?: data[h.uppercase()] ?: data[h]
+                entry != null && entry !is JsonNull && entry.toString() != "false" && entry.toString() != "[]"
             }
         } catch (e: Exception) {
             Log.e("TorBoxApi", "checkCached parse error: $e, raw: $text")

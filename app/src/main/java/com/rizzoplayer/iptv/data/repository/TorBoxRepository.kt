@@ -40,10 +40,21 @@ class TorBoxRepository(
     // ─── Unified torrent model ────────────────────────────────────────────────
 
     fun parseInfoHash(stream: TorrentioStream): String? {
+        if (!stream.infoHash.isNullOrBlank()) return stream.infoHash
         val url = stream.url
-        return if (url.startsWith("magnet:?xt=urn:btih:")) {
-            url.removePrefix("magnet:?xt=urn:btih:").split("&").firstOrNull()
-        } else null
+        if (url.startsWith("magnet:?xt=urn:btih:")) {
+            return url.removePrefix("magnet:?xt=urn:btih:").split("&").firstOrNull()?.lowercase()
+        }
+        // Extract from debrid URL: https://.../provider/token/HASH/index/name
+        if (url.contains("torrentio.strem.fun")) {
+            val parts = url.split("/")
+            for (part in parts) {
+                if ((part.length == 40 || part.length == 32) && part.all { it.isLetterOrDigit() }) {
+                    return part.lowercase()
+                }
+            }
+        }
+        return null
     }
 
     fun parseMagnetFromHash(hash: String): String = "magnet:?xt=urn:btih:$hash"
@@ -73,16 +84,21 @@ class TorBoxRepository(
             else -> 0
         }
 
-    private fun torrentioToUnified(t: TorrentioStream): UnifiedTorrent = UnifiedTorrent(
-        title = t.title,
-        url = t.url,
-        hash = parseInfoHash(t),
-        size = 0L,
-        seeders = parseSeeders(t),
-        quality = parseQuality(t),
-        indexer = t.name,
-        source = TorrentSource.TORRENTIO
-    )
+    private fun torrentioToUnified(t: TorrentioStream): UnifiedTorrent {
+        val hash = parseInfoHash(t)
+        // If we have a hash, synthesis of the magnet URL is SAFER for TorBox API
+        val url = if (hash != null) parseMagnetFromHash(hash) else t.url
+        return UnifiedTorrent(
+            title = t.title,
+            url = url,
+            hash = hash,
+            size = 0L,
+            seeders = parseSeeders(t),
+            quality = parseQuality(t),
+            indexer = t.name,
+            source = TorrentSource.TORRENTIO
+        )
+    }
 
     private fun searchToUnified(t: TorBoxSearchTorrent): UnifiedTorrent {
         val hash = t.hash ?: t.torrentLink?.let { link ->
@@ -209,12 +225,19 @@ class TorBoxRepository(
 
     // ─── Resolution (add to TorBox, poll, return download URL) ────────────────
 
-    private fun largestVideoFile(files: List<TorBoxFile>) =
-        files.filter { f -> f.name.endsWith(".mp4") || f.name.endsWith(".mkv") || f.name.endsWith(".avi") }
+    private fun largestVideoFile(files: List<TorBoxFile>): TorBoxFile? {
+        val videoExtensions = listOf(".mp4", ".mkv", ".avi", ".mov", ".wmv")
+        return files.filter { f -> videoExtensions.any { ext -> f.name.lowercase().endsWith(ext) } }
             .maxByOrNull { it.size }
+    }
 
     private suspend fun getDownloadUrl(torrentId: Int, files: List<TorBoxFile>): String? {
-        val video = largestVideoFile(files) ?: return null
+        val video = largestVideoFile(files)
+        if (video == null) {
+            Log.e(TAG, "getDownloadUrl FAILED: No video file found in torrent $torrentId. Files: ${files.size}")
+            return null
+        }
+        Log.d(TAG, "getDownloadUrl: torrentId=$torrentId, fileId=${video.id}, name=${video.name}")
         return torBox.requestDownloadLink(torrentId, video.id)
     }
 
@@ -261,12 +284,14 @@ class TorBoxRepository(
             t.hash?.let { cachedMap[it.lowercase()] == true || cachedMap[it] == true } == true
         } ?: unified.firstOrNull { it.hash != null } ?: unified.first()
 
-        if (best.hash == null || best.url.isBlank()) {
+        if (best.hash == null) {
             emit(StreamResolution.Failed("No valid torrent found")); return@flow
         }
+        val magnetUrl = if (best.url.isBlank()) parseMagnetFromHash(best.hash!!) else best.url
+        Log.d(TAG, "resolveMovie: best=${best.title}, hash=${best.hash}, url=${magnetUrl}, source=${best.source}")
 
         emit(StreamResolution.Queuing)
-        val result = try { torBox.addMagnet(best.url) } catch (e: Exception) { if (e is CancellationException) throw e;
+        val result = try { torBox.addMagnet(magnetUrl) } catch (e: Exception) { if (e is CancellationException) throw e;
             TorBoxAddResult(success = false, error = e.message)
         }
         if (!result.success || result.torrentId == null) {
@@ -286,11 +311,15 @@ class TorBoxRepository(
         }
 
         val startTime = System.currentTimeMillis()
-        while (System.currentTimeMillis() - startTime < 30_000L) {
+        var stallTime = startTime
+        var lastPct = 0
+        while (System.currentTimeMillis() - startTime < 300_000L) {
+            if (System.currentTimeMillis() - stallTime > 30_000L) break
             delay(2_000)
             val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
+                if (pct > lastPct) { lastPct = pct; stallTime = System.currentTimeMillis() }
                 if (info.isCompleted) {
                     val url = getDownloadUrl(torrentId, info.files)
                     if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
@@ -353,18 +382,21 @@ class TorBoxRepository(
         selected: UnifiedTorrent,
         fallbackHashes: List<String>
     ): Flow<StreamResolution> = flow {
+        Log.d(TAG, "resolveSelectedTorrent: title=${selected.title}, hash=${selected.hash}, source=${selected.source}")
         emit(StreamResolution.Searching)
 
-        if (selected.hash == null || selected.url.isBlank()) {
-            emit(StreamResolution.Failed("No valid torrent found")); return@flow
+        val hash = selected.hash
+        if (hash.isNullOrBlank()) {
+            Log.e(TAG, "resolveSelectedTorrent FAILED: Hash is missing for ${selected.title}")
+            emit(StreamResolution.Failed("No valid torrent hash found")); return@flow
         }
 
-        val hash = selected.hash
+        val magnet = if (selected.url.startsWith("magnet:")) selected.url else parseMagnetFromHash(hash)
         val cachedMap = try { torBox.checkCached(listOf(hash)) } catch (e: Exception) { if (e is CancellationException) throw e; emptyMap() }
         val isCached = cachedMap[hash.lowercase()] == true || cachedMap[hash] == true
 
         emit(StreamResolution.Queuing)
-        val result = try { torBox.addMagnet(selected.url) } catch (e: Exception) { if (e is CancellationException) throw e;
+        val result = try { torBox.addMagnet(magnet) } catch (e: Exception) { if (e is CancellationException) throw e;
             TorBoxAddResult(success = false, error = e.message)
         }
         if (!result.success || result.torrentId == null) {
@@ -382,11 +414,15 @@ class TorBoxRepository(
         }
 
         val startTime = System.currentTimeMillis()
-        while (System.currentTimeMillis() - startTime < 30_000L) {
+        var stallTime = startTime
+        var lastPct = 0
+        while (System.currentTimeMillis() - startTime < 300_000L) {
+            if (System.currentTimeMillis() - stallTime > 30_000L) break
             delay(2_000)
             val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
+                if (pct > lastPct) { lastPct = pct; stallTime = System.currentTimeMillis() }
                 if (info.isCompleted) {
                     val url = getDownloadUrl(torrentId, info.files)
                     if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
@@ -449,18 +485,21 @@ class TorBoxRepository(
         selected: UnifiedTorrent,
         fallbackHashes: List<String>
     ): Flow<StreamResolution> = flow {
+        Log.d(TAG, "resolveSelectedEpisodeTorrent: title=${selected.title}, hash=${selected.hash}")
         emit(StreamResolution.Searching)
 
-        if (selected.hash == null || selected.url.isBlank()) {
-            emit(StreamResolution.Failed("No valid episode torrent found")); return@flow
+        val hash = selected.hash
+        if (hash.isNullOrBlank()) {
+            Log.e(TAG, "resolveSelectedEpisodeTorrent FAILED: Hash is missing for ${selected.title}")
+            emit(StreamResolution.Failed("No valid episode hash found")); return@flow
         }
 
-        val hash = selected.hash
+        val magnet = if (selected.url.startsWith("magnet:")) selected.url else parseMagnetFromHash(hash)
         val cachedMap = try { torBox.checkCached(listOf(hash)) } catch (e: Exception) { if (e is CancellationException) throw e; emptyMap() }
         val isCached = cachedMap[hash.lowercase()] == true || cachedMap[hash] == true
 
         emit(StreamResolution.Queuing)
-        val result = try { torBox.addMagnet(selected.url) } catch (e: Exception) { if (e is CancellationException) throw e;
+        val result = try { torBox.addMagnet(magnet) } catch (e: Exception) { if (e is CancellationException) throw e;
             TorBoxAddResult(success = false, error = e.message)
         }
         if (!result.success || result.torrentId == null) {
@@ -478,11 +517,15 @@ class TorBoxRepository(
         }
 
         val startTime = System.currentTimeMillis()
-        while (System.currentTimeMillis() - startTime < 30_000L) {
+        var stallTime = startTime
+        var lastPct = 0
+        while (System.currentTimeMillis() - startTime < 300_000L) {
+            if (System.currentTimeMillis() - stallTime > 30_000L) break
             delay(2_000)
             val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
+                if (pct > lastPct) { lastPct = pct; stallTime = System.currentTimeMillis() }
                 if (info.isCompleted) {
                     val url = getDownloadUrl(torrentId, info.files)
                     if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
@@ -553,12 +596,14 @@ class TorBoxRepository(
             t.hash?.let { cachedMap[it.lowercase()] == true || cachedMap[it] == true } == true
         } ?: unified.firstOrNull { it.hash != null } ?: unified.first()
 
-        if (best.hash == null || best.url.isBlank()) {
+        if (best.hash == null) {
             emit(StreamResolution.Failed("No valid torrent found")); return@flow
         }
+        val magnetUrl = if (best.url.isBlank()) parseMagnetFromHash(best.hash!!) else best.url
+        Log.d(TAG, "resolveEpisode: best=${best.title}, hash=${best.hash}, url=${magnetUrl}, source=${best.source}")
 
         emit(StreamResolution.Queuing)
-        val result = try { torBox.addMagnet(best.url) } catch (e: Exception) { if (e is CancellationException) throw e;
+        val result = try { torBox.addMagnet(magnetUrl) } catch (e: Exception) { if (e is CancellationException) throw e;
             TorBoxAddResult(success = false, error = e.message)
         }
         if (!result.success || result.torrentId == null) {
@@ -578,11 +623,15 @@ class TorBoxRepository(
         }
 
         val startTime = System.currentTimeMillis()
-        while (System.currentTimeMillis() - startTime < 30_000L) {
+        var stallTime = startTime
+        var lastPct = 0
+        while (System.currentTimeMillis() - startTime < 300_000L) {
+            if (System.currentTimeMillis() - stallTime > 30_000L) break
             delay(2_000)
             val info = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (info != null) {
                 val pct = (info.percentDone * 100).toInt().coerceIn(0, 99)
+                if (pct > lastPct) { lastPct = pct; stallTime = System.currentTimeMillis() }
                 if (info.isCompleted) {
                     val url = getDownloadUrl(torrentId, info.files)
                     if (url != null) { emit(StreamResolution.Ready(url, fallbackHashes)); return@flow }
@@ -657,11 +706,15 @@ class TorBoxRepository(
         }
 
         val startTime = System.currentTimeMillis()
-        while (System.currentTimeMillis() - startTime < 30_000L) {
+        var stallTime = startTime
+        var lastPct = 0
+        while (System.currentTimeMillis() - startTime < 300_000L) {
+            if (System.currentTimeMillis() - stallTime > 30_000L) break
             delay(2_000)
             val torrentInfo = try { torBox.getTorrentInfo(torrentId) } catch (e: Exception) { if (e is CancellationException) throw e; null }
             if (torrentInfo != null) {
                 val pct = (torrentInfo.percentDone * 100).toInt().coerceIn(0, 99)
+                if (pct > lastPct) { lastPct = pct; stallTime = System.currentTimeMillis() }
                 if (torrentInfo.isCompleted) {
                     val dlUrl = getDownloadUrl(torrentId, torrentInfo.files)
                     if (dlUrl != null) { emit(StreamResolution.Ready(dlUrl)); return@flow }
