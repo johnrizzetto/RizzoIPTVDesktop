@@ -59,7 +59,7 @@ fun HomeScreen(viewModel: MainViewModel) {
     val state by viewModel.state.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
     val favoritesList by viewModel.favoritesList.collectAsState()
-    val continueWatching by viewModel.continueWatching.collectAsState()
+    val continueWatching by viewModel.watchHistory.collectAsState()
 
     // Which top-level screen is currently active — drives sidebar highlight
     // Observe NavHost directly so sidebar highlight stays in sync with actual navigation
@@ -147,7 +147,7 @@ fun HomeScreen(viewModel: MainViewModel) {
 
             // Continue Watching strip
             if (continueWatching.isNotEmpty() && state.searchQuery.isEmpty()) {
-                ContinueWatchingStrip(items = continueWatching, onPlay = viewModel::onPlayRecent)
+                ContinueWatchingStrip(items = continueWatching, onPlay = viewModel::onPlayWatchHistory)
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -318,7 +318,7 @@ private fun MoviesContent(
     state: com.rizzoplayer.iptv.ui.viewmodel.MainUiState,
     favorites: Map<String, Favorite>,
     favoritesList: List<Favorite>,
-    continueWatching: List<RecentItem>
+    continueWatching: List<com.rizzoplayer.iptv.data.model.WatchHistoryItem>
 ) {
     val q = state.searchQuery.trim().lowercase()
 
@@ -396,7 +396,7 @@ private fun MoviesContent(
                             icon = movie.posterPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
                         )
                     },
-                    onPlayRecent = viewModel::onPlayRecent,
+                    onPlayRecent = viewModel::onPlayWatchHistory,
                     isGridLoading = state.isGridLoading,
                     initialScrollIndex = state.restoreGridScrollIndex,
                     onScrollRestored = viewModel::clearGridScrollRestore,
@@ -437,7 +437,7 @@ private fun ShowsContent(
     state: com.rizzoplayer.iptv.ui.viewmodel.MainUiState,
     favorites: Map<String, Favorite>,
     favoritesList: List<Favorite>,
-    continueWatching: List<RecentItem>
+    continueWatching: List<com.rizzoplayer.iptv.data.model.WatchHistoryItem>
 ) {
     val q = state.searchQuery.trim().lowercase()
 
@@ -454,6 +454,8 @@ private fun ShowsContent(
                 TmdbShowDetailView(
                     show = detail.show,
                     seasons = detail.seasons,
+                    nextSeasonIdx = detail.nextSeasonIdx,
+                    nextEpisodeIdx = detail.nextEpisodeIdx,
                     favorites = favorites,
                     onPlay = { episode -> viewModel.onPlayTmdbEpisode(detail.show, episode) },
                     onFavToggle = { episode ->
@@ -514,7 +516,7 @@ private fun ShowsContent(
                             icon = show.posterPath?.let { "${com.rizzoplayer.iptv.AppConfig.TMDB_IMAGE_BASE}/${com.rizzoplayer.iptv.AppConfig.TMDB_POSTER_SIZE}$it" }
                         )
                     },
-                    onPlayRecent = viewModel::onPlayRecent,
+                    onPlayRecent = viewModel::onPlayWatchHistory,
                     isGridLoading = state.isGridLoading,
                     initialScrollIndex = state.restoreGridScrollIndex,
                     onScrollRestored = viewModel::clearGridScrollRestore,
@@ -525,6 +527,8 @@ private fun ShowsContent(
                 TmdbShowDetailView(
                     show = content.show,
                     seasons = content.seasons,
+                    nextSeasonIdx = content.nextSeasonIdx,
+                    nextEpisodeIdx = content.nextEpisodeIdx,
                     favorites = favorites,
                     onPlay = { episode -> viewModel.onPlayTmdbEpisode(content.show, episode) },
                     onFavToggle = { episode ->

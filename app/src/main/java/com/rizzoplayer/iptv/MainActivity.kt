@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
             credentialsStore      = CredentialsStore(applicationContext),
             favoritesStore        = FavoritesStore(applicationContext),
             recentlyWatchedStore  = RecentlyWatchedStore(applicationContext),
+            watchHistoryStore     = com.rizzoplayer.iptv.data.local.WatchHistoryStore(applicationContext),
             diskCache             = DiskCache(applicationContext),
             api                  = IPTVApiService(applicationContext)
         )

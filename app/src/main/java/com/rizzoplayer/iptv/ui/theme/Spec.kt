@@ -24,13 +24,13 @@ object Spec {
     val sectionPadding: Dp = 14.dp
 
     /** Focus scale multiplier when a card gains focus */
-    const val focusScale = 1.04f
+    const val focusScale = 1.03f
 
     /** Border width on focused cards */
-    val focusBorder: Dp = 2.dp
+    val focusBorder: Dp = 1.5.dp
 
     /** Elevation on focused cards */
-    val focusElevation: Dp = 6.dp
+    val focusElevation: Dp = 4.dp
 
     /** Standard transition duration in ms */
     const val transitionMs = 200

@@ -37,8 +37,7 @@ import com.rizzoplayer.iptv.ui.designsystem.RizzoProgressBar
 import com.rizzoplayer.iptv.ui.theme.*
 
 @Composable
-fun ContinueWatchingStrip(items: List<RecentItem>, onPlay: (RecentItem) -> Unit) {
-    val playbackPositionStore = (LocalContext.current.applicationContext as RizzoApp).playbackPositionStore
+fun ContinueWatchingStrip(items: List<com.rizzoplayer.iptv.data.model.WatchHistoryItem>, onPlay: (com.rizzoplayer.iptv.data.model.WatchHistoryItem) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(
             "Continue Watching",
@@ -50,60 +49,105 @@ fun ContinueWatchingStrip(items: List<RecentItem>, onPlay: (RecentItem) -> Unit)
         LazyRow(
             modifier = Modifier.fillMaxWidth().rizzoFocusGroup(),
             contentPadding = PaddingValues(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(items, key = { "${it.type}:${it.id}" }, contentType = { "RecentItem" }) { item ->
-                RecentCard(item = item, store = playbackPositionStore, onClick = { onPlay(item) })
+            items(items, key = { it.id }, contentType = { "WatchHistoryItem" }) { item ->
+                WatchHistoryCard(item = item, onClick = { onPlay(item) })
             }
         }
     }
 }
 
 @Composable
-private fun RecentCard(item: RecentItem, store: PlaybackPositionStore, onClick: () -> Unit) {
+private fun WatchHistoryCard(item: com.rizzoplayer.iptv.data.model.WatchHistoryItem, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    var fraction by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(item.id, item.type) {
-        val p = store.getProgress("${item.type}:${item.id}")
-        fraction = if (p != null && p.durationMs > 0)
-            (p.positionMs.toFloat() / p.durationMs).coerceIn(0f, 1f) else 0f
+
+    var fraction = 0f
+    var subtitle = ""
+
+    when (item) {
+        is com.rizzoplayer.iptv.data.model.WatchHistoryItem.Movie -> {
+            if (item.durationMs > 0) {
+                fraction = (item.watchedMs.toFloat() / item.durationMs).coerceIn(0f, 1f)
+            }
+            subtitle = "Movie"
+        }
+        is com.rizzoplayer.iptv.data.model.WatchHistoryItem.Series -> {
+            if (item.episodeDurationMs > 0) {
+                fraction = (item.episodeWatchedMs.toFloat() / item.episodeDurationMs).coerceIn(0f, 1f)
+            }
+            subtitle = "S${item.seasonNumber} E${item.episodeNumber}"
+        }
     }
+
     Column(
         modifier = Modifier
-            .background(CardBg, RoundedCornerShape(6.dp))
+            .width(100.dp)
             .rizzoFocusable(
                 onClick = onClick,
                 interactionSource = interactionSource,
-                shape = RoundedCornerShape(6.dp),
-                focusBorderColor = AccentBlue.copy(alpha = 0.6f),
-                focusBackgroundColor = AccentBlue.copy(alpha = 0.25f)
-            )
+                shape = RoundedCornerShape(8.dp),
+                focusBorderColor = AccentBlue,
+                focusBackgroundColor = CardBg
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .padding(horizontal = 8.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth()
+                .height(150.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(CardBg)
         ) {
-            ChannelLogo(url = item.icon, name = item.name, size = 24)
-            Spacer(Modifier.width(6.dp))
-            Text(
-                item.name,
-                fontSize = 11.sp,
-                color = if (isFocused) Color.White else TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 110.dp)
-            )
+            if (item.posterPath != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data("${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}${item.posterPath}")
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(item.title.take(1).uppercase(), fontSize = 32.sp, color = TextMuted)
+                }
+            }
+
+            // Progress bar overlay at the bottom of the poster
+            if (fraction > 0f && fraction < 0.98f) {
+                RizzoProgressBar(
+                    progress = fraction,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(3.dp),
+                    fillColor = AccentBlue,
+                    trackColor = Color.Black.copy(alpha = 0.5f)
+                )
+            }
         }
-        if (fraction > 0f && fraction < 0.98f) {
-            RizzoProgressBar(
-                progress = fraction,
-                modifier = Modifier.fillMaxWidth().height(2.dp),
-                fillColor = AccentBlue,
-                trackColor = CardBg
-            )
-        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            item.title,
+            fontSize = 11.sp,
+            color = if (isFocused) Color.White else TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+        Text(
+            subtitle,
+            fontSize = 10.sp,
+            color = if (isFocused) AccentBlue else TextMuted,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 4.dp)
+        )
     }
 }
 

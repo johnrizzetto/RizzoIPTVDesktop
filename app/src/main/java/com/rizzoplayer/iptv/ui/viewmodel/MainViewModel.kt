@@ -44,7 +44,7 @@ sealed class BrowseContent {
     data class Favorites(val items: Map<String, Favorite>) : BrowseContent()
     data class TmdbMovies(val items: List<TmdbMovie>, val genreName: String) : BrowseContent()
     data class TmdbShows(val items: List<TmdbShow>, val genreName: String) : BrowseContent()
-    data class TmdbShowDetail(val show: TmdbShow, val seasons: List<TmdbSeason>) : BrowseContent()
+    data class TmdbShowDetail(val show: TmdbShow, val seasons: List<TmdbSeason>, val nextSeasonIdx: Int = 0, val nextEpisodeIdx: Int = 0) : BrowseContent()
     data class TmdbMovieDetail(val movie: TmdbMovie) : BrowseContent()
     data class TmdbSearchResults(val movies: List<TmdbMovie>, val shows: List<TmdbShow>, val query: String) : BrowseContent()
     data class StreamPicker(
@@ -189,8 +189,17 @@ class MainViewModel(
     val savedServers: StateFlow<List<ServerConfig>> = serversStore.servers
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    private val _continueWatching = MutableStateFlow<List<RecentItem>>(emptyList())
-    val continueWatching: StateFlow<List<RecentItem>> = _continueWatching.asStateFlow()
+    val watchHistory: StateFlow<List<com.rizzoplayer.iptv.data.model.WatchHistoryItem>> = repository.watchHistoryStore.historyList
+        .map { list ->
+            list.filter { item ->
+                when (item) {
+                    is com.rizzoplayer.iptv.data.model.WatchHistoryItem.Movie -> !item.isCompleted && item.watchedMs > 30_000L
+                    is com.rizzoplayer.iptv.data.model.WatchHistoryItem.Series -> !item.isCompleted
+                    else -> false
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // ── TMDB prefetch debounce ───────────────────────────────────────────
     private var lastPrefetchMovieId: Int = -1
@@ -465,16 +474,7 @@ class MainViewModel(
             state.mapNotNull { it.credentials }.distinctUntilChanged().collect { launchUrlCacheRefresh() }
         }
 
-        viewModelScope.launch {
-            recentlyWatched.collect { items ->
-                val playbackStore = (application as RizzoApp).playbackPositionStore
-                _continueWatching.value = items.filter { item ->
-                    val key = "${item.type}:${item.id}"
-                    val progress = playbackStore.getProgress(key)
-                    progress != null && !progress.isWatched && progress.positionMs > 30_000L
-                }
-            }
-        }
+
     }
 
     // ── Restore last section ───────────────────────────────────────────────
@@ -683,7 +683,33 @@ class MainViewModel(
         loadTmdb {
             val detail = tmdbRepository.getShowDetail(show.id) ?: throw Exception("Show not found")
             val seasons = tmdbRepository.getSeasons(show.id, detail.numberOfSeasons)
-            BrowseContent.TmdbShowDetail(detail, seasons)
+            
+            var nextSeasonIdx = 0
+            var nextEpisodeIdx = 0
+            
+            val seriesHistory = watchHistory.value.filterIsInstance<com.rizzoplayer.iptv.data.model.WatchHistoryItem.Series>().find { it.id == show.id.toString() }
+            if (seriesHistory != null) {
+                val sIdx = seasons.indexOfFirst { it.seasonNumber == seriesHistory.seasonNumber }
+                if (sIdx != -1) {
+                    val season = seasons[sIdx]
+                    val eIdx = season.episodes.indexOfFirst { it.episodeNumber == seriesHistory.episodeNumber }
+                    if (eIdx != -1) {
+                        nextSeasonIdx = sIdx
+                        nextEpisodeIdx = eIdx
+                        
+                        if (seriesHistory.isEpisodeCompleted) {
+                            if (eIdx + 1 < season.episodes.size) {
+                                nextEpisodeIdx = eIdx + 1
+                            } else if (sIdx + 1 < seasons.size) {
+                                nextSeasonIdx = sIdx + 1
+                                nextEpisodeIdx = 0
+                            }
+                        }
+                    }
+                }
+            }
+            
+            BrowseContent.TmdbShowDetail(detail, seasons, nextSeasonIdx, nextEpisodeIdx)
         }
     }
 
@@ -1214,6 +1240,40 @@ class MainViewModel(
             playSelectedTmdbEpisodeStream(stream)
         } else {
             playSelectedTmdbStream(stream)
+        }
+    }
+
+    fun onPlayWatchHistory(item: com.rizzoplayer.iptv.data.model.WatchHistoryItem) {
+        viewModelScope.launch {
+            when (item) {
+                is com.rizzoplayer.iptv.data.model.WatchHistoryItem.Movie -> {
+                    val tmdbId = item.id.toIntOrNull() ?: return@launch
+                    val detail = tmdbRepository.getMovieDetail(tmdbId) ?: return@launch
+                    val movie = com.rizzoplayer.iptv.data.model.TmdbMovie(
+                        id = tmdbId,
+                        title = detail.title,
+                        posterPath = detail.posterPath,
+                        backdropPath = detail.backdropPath,
+                        rating = detail.rating,
+                        releaseDate = detail.releaseDate
+                    )
+                    selectTmdbMovie(movie)
+                }
+                is com.rizzoplayer.iptv.data.model.WatchHistoryItem.Series -> {
+                    val showId = item.id.toIntOrNull() ?: return@launch
+                    val detail = tmdbRepository.getShowDetail(showId) ?: return@launch
+                    val show = com.rizzoplayer.iptv.data.model.TmdbShow(
+                        id = showId,
+                        name = detail.name,
+                        posterPath = detail.posterPath,
+                        backdropPath = detail.backdropPath,
+                        rating = detail.rating,
+                        firstAirDate = detail.firstAirDate,
+                        overview = detail.overview
+                    )
+                    selectTmdbShow(show)
+                }
+            }
         }
     }
 

@@ -72,10 +72,10 @@ import androidx.compose.animation.core.tween
 fun MoviesHome(
     content: BrowseContent.TmdbMovies,
     favorites: Map<String, Favorite>,
-    continueWatchingItems: List<RecentItem> = emptyList(),
+    continueWatchingItems: List<com.rizzoplayer.iptv.data.model.WatchHistoryItem> = emptyList(),
     onSelectMovie: (TmdbMovie) -> Unit,
     onToggleFavorite: (TmdbMovie) -> Unit,
-    onPlayRecent: ((RecentItem) -> Unit)? = null,
+    onPlayRecent: ((com.rizzoplayer.iptv.data.model.WatchHistoryItem) -> Unit)? = null,
     isGridLoading: Boolean = false,
     initialScrollIndex: Int = -1,
     onScrollRestored: () -> Unit = {},
@@ -106,7 +106,7 @@ fun MoviesHome(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        val filteredContinueWatching = continueWatchingItems.filter { it.type == "vod" || it.type == "tmdb_movie" }
+        val filteredContinueWatching = continueWatchingItems.filterIsInstance<com.rizzoplayer.iptv.data.model.WatchHistoryItem.Movie>()
         if (filteredContinueWatching.isNotEmpty() && onPlayRecent != null) {
             ContinueWatchingStrip(
                 items = filteredContinueWatching,

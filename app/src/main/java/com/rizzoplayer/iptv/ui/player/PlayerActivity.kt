@@ -246,7 +246,6 @@ class PlayerActivity : ComponentActivity() {
         finish()
     }
 
-    /** Save current position to PlaybackPositionStore immediately (batches writes every 5s). */
     private fun savePositionNow() {
         val p = player ?: return
         if (contentId.isEmpty()) return
@@ -255,8 +254,21 @@ class PlayerActivity : ComponentActivity() {
         val positionMs = p.currentPosition
         val durationMs = p.duration.coerceAtLeast(0)
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            (application as RizzoApp).playbackPositionStore
-                .saveAsync(key, positionMs, durationMs)
+            val app = application as RizzoApp
+            app.playbackPositionStore.saveAsync(key, positionMs, durationMs)
+            
+            // Save to WatchHistoryStore
+            if (contentType == "tmdb_movie") {
+                app.watchHistoryStore.updateMovieProgress(contentId, positionMs, durationMs)
+            } else if (contentType == "tmdb_episode") {
+                val parts = contentId.split(":")
+                if (parts.size == 3) {
+                    val showId = parts[0]
+                    val season = parts[1].toIntOrNull() ?: 0
+                    val epNum = parts[2].toIntOrNull() ?: 0
+                    app.watchHistoryStore.updateSeriesProgress(showId, season, epNum, positionMs, durationMs)
+                }
+            }
         }
     }
 

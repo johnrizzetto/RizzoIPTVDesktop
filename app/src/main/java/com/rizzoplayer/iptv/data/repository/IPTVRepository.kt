@@ -10,6 +10,7 @@ import com.rizzoplayer.iptv.data.local.CredentialsStore
 import com.rizzoplayer.iptv.data.local.DiskCache
 import com.rizzoplayer.iptv.data.local.FavoritesStore
 import com.rizzoplayer.iptv.data.local.RecentlyWatchedStore
+import com.rizzoplayer.iptv.data.local.WatchHistoryStore
 import com.rizzoplayer.iptv.data.model.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -18,6 +19,7 @@ class IPTVRepository(
     val credentialsStore: CredentialsStore,
     val favoritesStore: FavoritesStore,
     val recentlyWatchedStore: RecentlyWatchedStore,
+    val watchHistoryStore: WatchHistoryStore,
     private val diskCache: DiskCache,
     private val api: IPTVApiService,
     private val json: Json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true }

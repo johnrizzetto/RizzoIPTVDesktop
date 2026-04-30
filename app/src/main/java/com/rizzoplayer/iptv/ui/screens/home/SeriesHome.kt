@@ -11,11 +11,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,10 +64,10 @@ import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
 fun SeriesHome(
     content: BrowseContent.TmdbShows,
     favorites: Map<String, Favorite>,
-    continueWatchingItems: List<RecentItem> = emptyList(),
+    continueWatchingItems: List<com.rizzoplayer.iptv.data.model.WatchHistoryItem> = emptyList(),
     onSelectShow: (TmdbShow) -> Unit,
     onToggleFavorite: (TmdbShow) -> Unit,
-    onPlayRecent: ((RecentItem) -> Unit)? = null,
+    onPlayRecent: ((com.rizzoplayer.iptv.data.model.WatchHistoryItem) -> Unit)? = null,
     isGridLoading: Boolean = false,
     initialScrollIndex: Int = -1,
     onScrollRestored: () -> Unit = {},
@@ -96,7 +98,7 @@ fun SeriesHome(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        val filteredContinueWatching = continueWatchingItems.filter { it.type == "series" || it.type == "episode" }
+        val filteredContinueWatching = continueWatchingItems.filterIsInstance<com.rizzoplayer.iptv.data.model.WatchHistoryItem.Series>()
         if (filteredContinueWatching.isNotEmpty() && onPlayRecent != null) {
             ContinueWatchingStrip(
                 items = filteredContinueWatching,
@@ -330,6 +332,8 @@ fun TmdbShowGrid(
 fun TmdbShowDetailView(
     show: TmdbShow,
     seasons: List<TmdbSeason>,
+    nextSeasonIdx: Int,
+    nextEpisodeIdx: Int,
     favorites: Map<String, Favorite>,
     onPlay: (TmdbEpisode) -> Unit,
     onFavToggle: (TmdbEpisode) -> Unit,
@@ -337,7 +341,7 @@ fun TmdbShowDetailView(
 ) {
     val backdrop = show.backdropPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_BACKDROP_SIZE}$it" }
     val poster = show.posterPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}$it" }
-    var selectedSeasonIdx by remember { mutableIntStateOf(0) }
+    var selectedSeasonIdx by remember { mutableIntStateOf(nextSeasonIdx) }
     val episodeFocus = remember { FocusRequester() }
     var episodeFocusTrigger by remember { mutableIntStateOf(0) }
 
@@ -477,14 +481,17 @@ fun TmdbShowDetailView(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                 contentPadding = PaddingValues(vertical = 4.dp)
             ) {
-                items(episodes, key = { "${it.seasonNumber}-${it.episodeNumber}" }, contentType = { "TmdbEpisode" }) { episode ->
+                itemsIndexed(episodes, key = { _, it -> "${it.seasonNumber}-${it.episodeNumber}" }, contentType = { _, _ -> "TmdbEpisode" }) { index, episode ->
                     val isFav = favorites.containsKey("${show.id}:${episode.seasonNumber}:${episode.episodeNumber}")
+                    // Focus the calculated next episode on initial load, or the first episode if season changed
+                    val shouldFocus = if (selectedSeasonIdx == nextSeasonIdx) index == nextEpisodeIdx else index == 0
                     TmdbEpisodeRow(
                         episode = episode,
+                        showId = show.id.toString(),
                         isFavorite = isFav,
                         onPlay = { onPlay(episode) },
                         onFavToggle = { onFavToggle(episode) },
-                        onFocus = episodeFocus
+                        onFocus = if (shouldFocus) episodeFocus else null
                     )
                 }
             }
@@ -495,10 +502,11 @@ fun TmdbShowDetailView(
 @Composable
 fun TmdbEpisodeRow(
     episode: TmdbEpisode,
+    showId: String,
     isFavorite: Boolean,
     onPlay: () -> Unit,
     onFavToggle: () -> Unit,
-    onFocus: FocusRequester
+    onFocus: FocusRequester?
 ) {
     val stillUrl = episode.stillPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/w185$it" }
     val interactionSource = remember { MutableInteractionSource() }
@@ -513,7 +521,7 @@ fun TmdbEpisodeRow(
                 focusBorderColor = AccentBlue,
                 focusBackgroundColor = NavFocusBg
             )
-            .focusRequester(onFocus)
+            .then(if (onFocus != null) Modifier.focusRequester(onFocus) else Modifier)
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -556,6 +564,28 @@ fun TmdbEpisodeRow(
                     .padding(horizontal = 4.dp, vertical = 1.dp)
             ) {
                 Text("E${episode.episodeNumber}", fontSize = 9.sp, color = Color.White)
+            }
+            
+            // Progress bar
+            val playbackStore = (LocalContext.current.applicationContext as com.rizzoplayer.iptv.RizzoApp).playbackPositionStore
+            var fraction by remember { mutableFloatStateOf(0f) }
+            LaunchedEffect(episode, showId) {
+                val key = "tmdb_episode:${showId}:${episode.seasonNumber}:${episode.episodeNumber}"
+                val p = playbackStore.getProgress(key)
+                fraction = if (p != null && p.durationMs > 0)
+                    (p.positionMs.toFloat() / p.durationMs).coerceIn(0f, 1f) else 0f
+            }
+            
+            if (fraction > 0f) {
+                com.rizzoplayer.iptv.ui.designsystem.RizzoProgressBar(
+                    progress = fraction,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(3.dp),
+                    fillColor = AccentBlue,
+                    trackColor = Color.Black.copy(alpha = 0.5f)
+                )
             }
         }
 

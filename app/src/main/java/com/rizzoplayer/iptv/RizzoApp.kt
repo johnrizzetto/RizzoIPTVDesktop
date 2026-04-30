@@ -18,6 +18,8 @@ class RizzoApp : Application() {
 
     lateinit var playbackPositionStore: PlaybackPositionStore
         private set
+    lateinit var watchHistoryStore: com.rizzoplayer.iptv.data.local.WatchHistoryStore
+        private set
     lateinit var preferencesStore: PreferencesStore
         private set
 
@@ -25,6 +27,7 @@ class RizzoApp : Application() {
         super.onCreate()
 
         playbackPositionStore = PlaybackPositionStore(this)
+        watchHistoryStore = com.rizzoplayer.iptv.data.local.WatchHistoryStore(this)
         preferencesStore = PreferencesStore(this)
 
         Coil.setImageLoader(

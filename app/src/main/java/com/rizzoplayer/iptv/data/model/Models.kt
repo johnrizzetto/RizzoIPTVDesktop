@@ -151,3 +151,42 @@ data class PlayEvent(
     val nextTitle: String = "",
     val contentId: String = ""
 )
+
+@Immutable
+@Serializable
+sealed class WatchHistoryItem {
+    abstract val id: String // movieId or seriesId
+    abstract val title: String
+    abstract val posterPath: String?
+    abstract val watchedAt: Long
+    abstract val isCompleted: Boolean
+
+    @Immutable
+    @Serializable
+    @SerialName("movie")
+    data class Movie(
+        override val id: String,
+        override val title: String,
+        override val posterPath: String? = null,
+        override val watchedAt: Long = System.currentTimeMillis(),
+        override val isCompleted: Boolean = false,
+        val watchedMs: Long = 0,
+        val durationMs: Long = 0
+    ) : WatchHistoryItem()
+
+    @Immutable
+    @Serializable
+    @SerialName("series")
+    data class Series(
+        override val id: String,
+        override val title: String,
+        override val posterPath: String? = null,
+        override val watchedAt: Long = System.currentTimeMillis(),
+        override val isCompleted: Boolean = false, // True if series is finished
+        val seasonNumber: Int = 1,
+        val episodeNumber: Int = 1,
+        val episodeWatchedMs: Long = 0,
+        val episodeDurationMs: Long = 0,
+        val isEpisodeCompleted: Boolean = false
+    ) : WatchHistoryItem()
+}
