@@ -188,14 +188,6 @@ private fun SidebarNavItem(
                 focusBorderColor = if (danger) RedColor.copy(alpha = 0.45f) else AccentBlue,
                 focusBackgroundColor = bg // use the calculated bg for focus
             )
-            .onFocusChanged {
-                // Track sidebar index for return navigation (Phase 2 FocusManager pattern)
-                if (it.isFocused) {
-                    FocusManager.setSidebarFocusedIndex(
-                        NAV_ENTRIES.indexOfFirst { e -> e.label == label }.takeIf { i -> i >= 0 } ?: 0
-                    )
-                }
-            }
             .focusRequester(fr)
             .padding(horizontal = if (expanded) 10.dp else 0.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically

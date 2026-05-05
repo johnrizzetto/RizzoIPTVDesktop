@@ -1,7 +1,6 @@
 package com.rizzoplayer.iptv.ui.screens.home
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,8 +50,6 @@ fun StreamPickerScreen(
     LaunchedEffect(focusedIdx) {
         listState.animateScrollToItem(focusedIdx.coerceIn(0, (parsedStreams.size - 1).coerceAtLeast(0)))
     }
-
-    BackHandler { onBack() }
 
     Box(
         modifier = Modifier

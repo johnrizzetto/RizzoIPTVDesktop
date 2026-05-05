@@ -16,6 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -37,7 +39,13 @@ import com.rizzoplayer.iptv.ui.designsystem.RizzoProgressBar
 import com.rizzoplayer.iptv.ui.theme.*
 
 @Composable
-fun ContinueWatchingStrip(items: List<com.rizzoplayer.iptv.data.model.WatchHistoryItem>, onPlay: (com.rizzoplayer.iptv.data.model.WatchHistoryItem) -> Unit) {
+fun ContinueWatchingStrip(
+    items: List<com.rizzoplayer.iptv.data.model.WatchHistoryItem>,
+    onPlay: (com.rizzoplayer.iptv.data.model.WatchHistoryItem) -> Unit,
+    focusRestorer: FocusRequester? = null,
+) {
+    val firstFocus = remember { FocusRequester() }
+
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(
             "Continue Watching",
@@ -47,19 +55,30 @@ fun ContinueWatchingStrip(items: List<com.rizzoplayer.iptv.data.model.WatchHisto
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
         )
         LazyRow(
-            modifier = Modifier.fillMaxWidth().rizzoFocusGroup(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .rizzoFocusGroup()
+                .then(if (focusRestorer != null) Modifier.focusRequester(firstFocus) else Modifier),
             contentPadding = PaddingValues(horizontal = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(items, key = { it.id }, contentType = { "WatchHistoryItem" }) { item ->
-                WatchHistoryCard(item = item, onClick = { onPlay(item) })
+                WatchHistoryCard(
+                    item = item,
+                    onClick = { onPlay(item) },
+                    firstFocus = if (focusRestorer != null && item == items.firstOrNull()) firstFocus else null
+                )
             }
         }
     }
 }
 
 @Composable
-private fun WatchHistoryCard(item: com.rizzoplayer.iptv.data.model.WatchHistoryItem, onClick: () -> Unit) {
+private fun WatchHistoryCard(
+    item: com.rizzoplayer.iptv.data.model.WatchHistoryItem,
+    onClick: () -> Unit,
+    firstFocus: FocusRequester? = null,
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
@@ -84,6 +103,7 @@ private fun WatchHistoryCard(item: com.rizzoplayer.iptv.data.model.WatchHistoryI
     Column(
         modifier = Modifier
             .width(100.dp)
+            .then(if (firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier)
             .rizzoFocusable(
                 onClick = onClick,
                 interactionSource = interactionSource,

@@ -538,11 +538,11 @@ private fun SeasonTab(
     val isFocused by interactionSource.collectIsFocusedAsState()
     val seasonTabFocus = remember { FocusRequester() }
 
-    LaunchedEffect(isFocused) {
-        if (isFocused) {
-            // Request focus on the row anchor so LazyColumn.up routes here
-            try { seasonTabFocus.requestFocus() } catch (_: Exception) {}
-        }
+    // One-shot: request focus on the row anchor when this tab first gains focus.
+    // Does NOT fire on every recomposition (unlike LaunchedEffect(isFocused) which
+    // re-fires whenever any state changes while the tab holds focus).
+    LaunchedEffect(Unit) {
+        try { seasonTabFocus.requestFocus() } catch (_: Exception) {}
     }
 
     Box(

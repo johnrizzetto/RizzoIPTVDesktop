@@ -157,7 +157,7 @@ fun HomeScreen(viewModel: MainViewModel) {
 
             // Continue Watching strip
             if (continueWatching.isNotEmpty() && state.searchQuery.isEmpty()) {
-                ContinueWatchingStrip(items = continueWatching, onPlay = viewModel::onPlayWatchHistory)
+                ContinueWatchingStrip(items = continueWatching, onPlay = viewModel::onPlayWatchHistory, focusRestorer = contentFocusRestorer)
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -167,13 +167,14 @@ fun HomeScreen(viewModel: MainViewModel) {
             }
 
             // Search bar
+            val continueWatchingFocus = remember { androidx.compose.ui.focus.FocusRequester() }
             SearchBar(
                 query = state.searchQuery,
                 onQueryChange = viewModel::setSearchQuery,
                 onClear = { viewModel.setSearchQuery("") },
                 onVoiceResult = { viewModel.setSearchQuery(it) },
                 focusRequester = searchBarFocus,
-                downTarget = contentFocusRestorer
+                downTarget = if (continueWatching.isNotEmpty() && state.searchQuery.isEmpty()) continueWatchingFocus else contentFocusRestorer
             )
 
             // EPG — expanded strip for live TV
@@ -190,7 +191,10 @@ fun HomeScreen(viewModel: MainViewModel) {
                     .weight(1f)
                     .fillMaxHeight()
                     .focusRequester(contentFocusRestorer)
-                    .focusProperties { up = searchBarFocus }
+                    .focusProperties {
+                        up = searchBarFocus
+                        down = if (continueWatching.isNotEmpty() && state.searchQuery.isEmpty()) continueWatchingFocus else contentFocusRestorer
+                    }
                     .focusGroup()
             ) {
                 NavHost(
