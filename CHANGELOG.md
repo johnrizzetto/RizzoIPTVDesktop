@@ -4,6 +4,18 @@ All notable changes to Rizzo Player v5 are documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [6.0.0] — 2026-05-05
+
+### Fixed
+- **Bug #1 — VOD curated rows -23/-24/-25 missing:** HBO Max (-23), Apple TV+ (-24), Peacock (-25) categories appeared in Movies but had no switch cases, silently falling through to Popular.
+- **Bug #2 — Series curated rows -5 through -17, -23 missing:** Streaming platform and Moods & Discovery rows (Netflix, Prime, Disney+, Hulu, Paramount+, Peacock, Critically Acclaimed, Anime, Reality TV, Documentaries, Mini Series, Kids, Korean Dramas, DC Comics) had labels but no switch mappings, silently falling through to Popular.
+- **Bug #3 — Series -18/-19 wrong content routing:** "📺 HBO Max" (-18) was routing to `getOscarWinnerMovies()`; "🍎 Apple TV+" (-19) was routing to `getOscarNominatedMovies()`. Remapped to `getHboMaxShows()` and `getAppleShows()` respectively.
+
+### Added
+- `docs/ARCHITECTURE-v6.md` — full architecture analysis of TMDB pipeline, category ID system, bug inventory, and data flow diagrams.
+
+---
+
 ## [4.0.0-alpha.1] — YYYY-MM-DD
 
 ### Added

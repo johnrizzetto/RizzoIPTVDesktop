@@ -77,8 +77,12 @@ fun MoviesHome(
     isGridLoading: Boolean = false,
     initialScrollIndex: Int = -1,
     onScrollRestored: () -> Unit = {},
-    onScrollPositionChange: (Int) -> Unit = {}
+    onScrollPositionChange: (Int) -> Unit = {},
+    onBack: (() -> Unit)? = null,
 ) {
+    // Stremio-style: when genreName is NOT "Discover Movies", we're in a category drill-in view.
+    // Hide hero + curated rows, show only the category grid with a back affordance.
+    val isDiscoverView = content.genreName == "Discover Movies"
     // Hero auto-rotation state
     val heroItems = content.items.take(10) // showcase up to 10 items
     var heroIndex by remember { mutableIntStateOf(0) }
@@ -104,6 +108,41 @@ fun MoviesHome(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // ── Stremio-style drill-in view: full-screen category grid with back affordance ──
+        if (!isDiscoverView) {
+            // Clean back row
+            BackRow(
+                label = content.genreName,
+                onBack = { onBack?.invoke() }
+            )
+            if (content.items.isEmpty()) {
+                Box(
+                    Modifier.fillMaxSize().padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🎬", fontSize = 48.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Text("No titles found", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TextMuted)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Try a different category or check your connection", fontSize = 12.sp, color = TextMuted.copy(alpha = 0.6f))
+                    }
+                }
+            } else {
+                TmdbMovieGrid(
+                    content = content,
+                    favorites = favorites,
+                    onSelectMovie = onSelectMovie,
+                    onToggleFavorite = onToggleFavorite,
+                    isGridLoading = isGridLoading,
+                    initialScrollIndex = initialScrollIndex,
+                    onScrollRestored = onScrollRestored,
+                    onScrollPositionChange = onScrollPositionChange,
+                    onBack = onBack
+                )
+            }
+        } else {
+        // ── Discover view: full hero + curated rows experience ──
         val filteredContinueWatching = continueWatchingItems.filter { it.type == "vod" || it.type == "tmdb_movie" }
         if (filteredContinueWatching.isNotEmpty() && onPlayRecent != null) {
             ContinueWatchingStrip(
@@ -243,6 +282,7 @@ fun MoviesHome(
                 onScrollPositionChange = onScrollPositionChange
             )
         }
+        }
     }
 }
 
@@ -256,7 +296,8 @@ fun TmdbMovieGrid(
     isGridLoading: Boolean = false,
     initialScrollIndex: Int = -1,
     onScrollRestored: () -> Unit = {},
-    onScrollPositionChange: (Int) -> Unit = {}
+    onScrollPositionChange: (Int) -> Unit = {},
+    onBack: (() -> Unit)? = null,
 ) {
     val firstFocus = remember { FocusRequester() }
     val listState = rememberLazyGridState()
@@ -304,31 +345,38 @@ fun TmdbMovieGrid(
     if (isGridLoading) {
         ShimmerMovieGrid()
     } else {
-        LazyVerticalGrid(
-            state = listState,
-            columns = GridCells.Adaptive(120.dp),
-            modifier = Modifier
-                .fillMaxSize()
-                .rizzoFocusGroup()
-                .gridTopRowFocus(firstFocus),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(content.items, key = { it.id }, contentType = { "TmdbMovie" }) { movie ->
-                val isFirst = content.items.firstOrNull()?.id == movie.id
-                TmdbPosterCard(
-                    title = movie.title,
-                    posterPath = movie.posterPath,
-                    rating = movie.rating,
-                    year = movie.releaseDate.take(4),
-                    overview = movie.overview,
-                    isFavorite = favorites.containsKey(movie.id.toString()),
-                    onClick = { onSelectMovie(movie) },
-                    onLongClick = { onToggleFavorite(movie) },
-
-                    modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (onBack != null) {
+                BackRow(
+                    label = content.genreName,
+                    onBack = onBack
                 )
+            }
+            LazyVerticalGrid(
+                state = listState,
+                columns = GridCells.Adaptive(120.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .rizzoFocusGroup()
+                    .gridTopRowFocus(firstFocus),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(content.items, key = { it.id }, contentType = { "TmdbMovie" }) { movie ->
+                    val isFirst = content.items.firstOrNull()?.id == movie.id
+                    TmdbPosterCard(
+                        title = movie.title,
+                        posterPath = movie.posterPath,
+                        rating = movie.rating,
+                        year = movie.releaseDate.take(4),
+                        overview = movie.overview,
+                        isFavorite = favorites.containsKey(movie.id.toString()),
+                        onClick = { onSelectMovie(movie) },
+                        onLongClick = { onToggleFavorite(movie) },
+                        modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier
+                    )
+                }
             }
         }
     }

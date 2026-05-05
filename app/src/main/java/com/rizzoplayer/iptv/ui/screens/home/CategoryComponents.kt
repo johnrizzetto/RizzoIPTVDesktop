@@ -17,10 +17,41 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzoplayer.iptv.data.model.Category
+import androidx.compose.ui.graphics.Color
 import com.rizzoplayer.iptv.ui.theme.AccentBlue
 import com.rizzoplayer.iptv.ui.theme.NavFocusBg
 import com.rizzoplayer.iptv.ui.theme.TextMuted
 import com.rizzoplayer.iptv.ui.theme.TextPrimary
+
+@Composable
+fun BackRow(
+    label: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (isFocused) NavFocusBg else Color.Transparent)
+            .then(if (isFocused) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(6.dp)) else Modifier)
+            .focusable(interactionSource = interactionSource)
+            .clickable(onClick = onBack)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("←", fontSize = 16.sp, color = if (isFocused) AccentBlue else TextMuted)
+        Spacer(Modifier.width(10.dp))
+        Text(
+            label,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isFocused) TextPrimary else TextMuted
+        )
+    }
+}
 
 @Composable
 fun CategoryRow(

@@ -53,8 +53,8 @@ android {
         create("v5") {
             dimension = "version"
             applicationIdSuffix = ".v5"
-            versionName = "5.0.0"
-            versionCode = 500
+            versionName = "6.0.0"
+            versionCode = 600
         }
     }
 

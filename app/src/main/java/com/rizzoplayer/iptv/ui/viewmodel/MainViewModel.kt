@@ -532,12 +532,24 @@ class MainViewModel(
     private fun loadVodCategories() = loadTmdb {
         val genres = tmdbRepository.getMovieGenres().map { Category(it.id.toString(), it.name) }
         val all = listOf(
-            // ── FEATURED ───
-            Category("H:featured", "─── FEATURED ───"),
-            Category("-1",  "🔥 Popular"),
-            Category("-2",  "⭐ Top Rated"),
-            Category("-3",  "🎬 Now Playing"),
-            Category("-4",  "📈 Trending"),
+            // ── IMDB TOP PICKS ───
+            Category("H:imdb", "─── IMDB TOP PICKS ───"),
+            Category("-18", "🏆 Oscar Winners"),
+            Category("-19", "🎖️ Oscar Nominated"),
+            Category("-20", "⭐ IMDB Top Rated"),
+            // ── ROTTEN TOMATOES ───
+            Category("H:rt", "─── ROTTEN TOMATOES ───"),
+            Category("-21", "🍅 Certified Fresh"),
+            Category("-22", "🍿 Audience Favorites"),
+            // ── FRANCHISE HUB ───
+            Category("H:franchise", "─── FRANCHISE HUB ───"),
+            Category("-34", "🦸 Marvel"),
+            Category("-35", "🚀 Star Wars"),
+            Category("-36", "🏰 Disney Family"),
+            Category("-37", "🦇 DC Comics"),
+            Category("-38", "🚗 Fast & Furious"),
+            Category("-39", "🔮 Pixar"),
+            Category("-40", "⚡ Harry Potter"),
             // ── STREAMING ───
             Category("H:platforms", "─── STREAMING ───"),
             Category("-5",  "🍿 Netflix"),
@@ -545,6 +557,9 @@ class MainViewModel(
             Category("-7",  "✨ Disney+"),
             Category("-8",  "📺 Hulu"),
             Category("-9",  "🎭 Paramount+"),
+            Category("-23", "📺 HBO Max"),
+            Category("-24", "🍎 Apple TV+"),
+            Category("-25", "🦚 Peacock"),
             // ── MOODS & DISCOVERY ───
             Category("H:moods", "─── MOODS & DISCOVERY ───"),
             Category("-10", "🆕 New Releases"),
@@ -562,8 +577,8 @@ class MainViewModel(
     private fun loadSeriesCategories() = loadTmdb {
         val genres = tmdbRepository.getTvGenres().map { Category(it.id.toString(), it.name) }
         val all = listOf(
-            // ── FEATURED ───
-            Category("H:featured", "─── FEATURED ───"),
+            // ── IMDB TOP PICKS ───
+            Category("H:imdb", "─── IMDB TOP PICKS ───"),
             Category("-1",  "🔥 Popular"),
             Category("-2",  "⭐ Top Rated"),
             Category("-3",  "📺 Airing Today"),
@@ -575,7 +590,15 @@ class MainViewModel(
             Category("-7",  "✨ Disney+"),
             Category("-8",  "📺 Hulu"),
             Category("-9",  "🎭 Paramount+"),
+            Category("-18", "📺 HBO Max"),
+            Category("-19", "🍎 Apple TV+"),
             Category("-10", "🦚 Peacock"),
+            // ── FRANCHISE HUB ───
+            Category("H:franchise", "─── FRANCHISE HUB ───"),
+            Category("-20", "🦸 Marvel"),
+            Category("-21", "🚀 Star Wars"),
+            Category("-22", "🏰 Disney+ Originals"),
+            Category("-23", "🦇 DC Comics"),
             // ── MOODS & DISCOVERY ───
             Category("H:moods", "─── MOODS & DISCOVERY ───"),
             Category("-11", "🏆 Critically Acclaimed"),
@@ -629,6 +652,21 @@ class MainViewModel(
                             -13 -> tmdbRepository.getClassicMovies()
                             -14 -> tmdbRepository.getKoreanMovies()
                             -15 -> tmdbRepository.getUpcomingMovies()
+                            -18 -> tmdbRepository.getOscarWinnerMovies()
+                            -19 -> tmdbRepository.getOscarNominatedMovies()
+                            -20 -> tmdbRepository.getTopRatedMoviesAllTime()
+                            -21 -> tmdbRepository.getCriticallyAcclaimedMovies()        // Certified Fresh (≈ RT)
+                            -22 -> tmdbRepository.getAudienceFavorites()
+                            -23 -> tmdbRepository.getHboMaxMovies()
+                            -24 -> tmdbRepository.getAppleMovies()
+                            -25 -> tmdbRepository.getPeacockMovies()
+                            -34 -> tmdbRepository.getMarvelMovies()
+                            -35 -> tmdbRepository.getStarWarsMovies()
+                            -36 -> tmdbRepository.getDisneyFamilyMovies()
+                            -37 -> tmdbRepository.getDcMovies()
+                            -38 -> tmdbRepository.getFastFuriousMovies()
+                            -39 -> tmdbRepository.getPixarMovies()
+                            -40 -> tmdbRepository.getHarryPotterMovies()
                             else -> tmdbRepository.getPopularMovies()
                         }
                         BrowseContent.TmdbMovies(items, category.name)
@@ -651,6 +689,12 @@ class MainViewModel(
                             -15 -> tmdbRepository.getMiniSeries()
                             -16 -> tmdbRepository.getKidsShows()
                             -17 -> tmdbRepository.getKoreanDramas()
+                            -18 -> tmdbRepository.getHboMaxShows()
+                            -19 -> tmdbRepository.getAppleShows()
+                            -20 -> tmdbRepository.getMarvelShows()
+                            -21 -> tmdbRepository.getStarWarsShows()
+                            -22 -> tmdbRepository.getDisneyShowsAll()
+                            -23 -> tmdbRepository.getDcShows()
                             else -> tmdbRepository.getPopularShows()
                         }
                         BrowseContent.TmdbShows(items, category.name)

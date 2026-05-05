@@ -174,6 +174,10 @@ class TmdbRepository(
         tmdb.getParamountMovies().results
     }
 
+    suspend fun getPeacockMovies() = cachedList("tmdb_v3_peacock_movies", TTL_CATALOGS) {
+        tmdb.getPeacockMovies().results
+    }
+
     // ── Streaming Platforms (Shows) ───────────────────────────
     suspend fun getPrimeShows() = cachedList("tmdb_v3_prime_shows", TTL_CATALOGS) {
         tmdb.getPrimeShows().results
@@ -189,6 +193,67 @@ class TmdbRepository(
     }
     suspend fun getPeacockShows() = cachedList("tmdb_v3_peacock_shows", TTL_CATALOGS) {
         tmdb.getPeacockShows().results
+    }
+
+    // ── HBO Max (provider 384) ─────────────────────────────────
+    suspend fun getHboMaxMovies() = cachedList("tmdb_v3_hbomax_movies", TTL_CATALOGS) {
+        tmdb.getHboMaxMovies().results
+    }
+    suspend fun getHboMaxShows(): List<TmdbShow> = cachedList("tmdb_v3_hbomax_shows", TTL_CATALOGS) {
+        tmdb.getHboMaxShows().results
+    }
+
+    // ── IMDB / Oscar Picks (Movies) ────────────────────────────
+    suspend fun getOscarWinnerMovies() = cachedList("tmdb_v3_oscar_winners", TTL_CATALOGS) {
+        tmdb.getOscarWinnerMovies().results
+    }
+    suspend fun getOscarNominatedMovies() = cachedList("tmdb_v3_oscar_nominated", TTL_CATALOGS) {
+        tmdb.getOscarNominatedMovies().results
+    }
+    suspend fun getTopRatedMoviesAllTime() = cachedList("tmdb_v3_toprated_alltime", TTL_CATALOGS) {
+        tmdb.getTopRatedMoviesAllTime().results
+    }
+
+    // ── Rotten Tomatoes-style (Movies) ──────────────────────────
+    suspend fun getAudienceFavorites() = cachedList("tmdb_v3_audience_favorites", TTL_CATALOGS) {
+        tmdb.getAudienceFavorites().results
+    }
+
+    // ── Franchise / Studio (Movies) ─────────────────────────────
+    suspend fun getMarvelMovies() = cachedList("tmdb_v3_marvel_movies", TTL_CATALOGS) {
+        tmdb.getMarvelMovies().results
+    }
+    suspend fun getStarWarsMovies() = cachedList("tmdb_v3_starwars_movies", TTL_CATALOGS) {
+        tmdb.getStarWarsMovies().results
+    }
+    suspend fun getDisneyFamilyMovies() = cachedList("tmdb_v3_disney_family_movies", TTL_CATALOGS) {
+        tmdb.getDisneyFamilyMovies().results
+    }
+    suspend fun getDcMovies() = cachedList("tmdb_v3_dc_movies", TTL_CATALOGS) {
+        tmdb.getDcMovies().results
+    }
+    suspend fun getFastFuriousMovies() = cachedList("tmdb_v3_fast_furious_movies", TTL_CATALOGS) {
+        tmdb.getFastFuriousMovies().results
+    }
+    suspend fun getPixarMovies() = cachedList("tmdb_v3_pixar_movies", TTL_CATALOGS) {
+        tmdb.getPixarMovies().results
+    }
+    suspend fun getHarryPotterMovies() = cachedList("tmdb_v3_harrypotter_movies", TTL_CATALOGS) {
+        tmdb.getHarryPotterMovies().results
+    }
+
+    // ── Franchise / Studio (Shows) ─────────────────────────────
+    suspend fun getMarvelShows() = cachedList("tmdb_v3_marvel_shows", TTL_CATALOGS) {
+        tmdb.getMarvelShows().results
+    }
+    suspend fun getStarWarsShows() = cachedList("tmdb_v3_starwars_shows", TTL_CATALOGS) {
+        tmdb.getStarWarsShows().results
+    }
+    suspend fun getDisneyShowsAll() = cachedList("tmdb_v3_disney_shows_all", TTL_CATALOGS) {
+        tmdb.getDisneyShowsAll().results
+    }
+    suspend fun getDcShows() = cachedList("tmdb_v3_dc_shows", TTL_CATALOGS) {
+        tmdb.getDcShows().results
     }
 
     // ── Moods & Discovery (Movies) ────────────────────────────

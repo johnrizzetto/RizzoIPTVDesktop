@@ -136,7 +136,15 @@ class TmdbApiService(context: Context, private val baseUrl: String = "https://ap
 
     // TMDB Watch Provider IDs (US):
     // 8=Netflix, 9=Amazon Prime, 15=Hulu, 337=Disney+, 350=Apple TV+,
-    // 384=Max/HBO, 386=Peacock, 531=Paramount+
+    // 384=Max/HBO, 386=Peacock, 531=Paramount+, 119=Peacock
+    //
+    // Certification (Oscar-equivalent for Academy Awards):
+    // win_awards=1 filters titles that won at least one major award.
+    // certification=BG,CS,GB,HK,HU,IE,IT,JP,KR,MX,NL,NZ,PH,RU,SE,SG,TH,US,...
+    // For Oscar winners: with_companies=420|921|1304|579|174|1107|10300|528|10375|2235
+    // TMDB studio IDs for franchise filtering:
+    // 420=Marvel, 10=DC, 1=Lucasfilm, 444=Universal, 1241=Disney, 25=Paramount,
+    // 2=Warner Bros, 21=Fox, 33=Sony Pictures, 923=Shifted franchise IDs
 
     // ── Streaming Platforms (Movies) ────────────────────────────
     suspend fun getPrimeMovies(): TmdbPage<TmdbMovie> =
@@ -150,6 +158,9 @@ class TmdbApiService(context: Context, private val baseUrl: String = "https://ap
 
     suspend fun getParamountMovies(): TmdbPage<TmdbMovie> =
         discoverMovies("with_watch_providers=531&watch_region=US&sort_by=popularity.desc")
+
+    suspend fun getPeacockMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_watch_providers=386&watch_region=US&sort_by=popularity.desc")
 
     // ── Streaming Platforms (Shows) ─────────────────────────────
     suspend fun getPrimeShows(): TmdbPage<TmdbShow> =
@@ -167,7 +178,61 @@ class TmdbApiService(context: Context, private val baseUrl: String = "https://ap
     suspend fun getPeacockShows(): TmdbPage<TmdbShow> =
         discoverShows("with_watch_providers=386&watch_region=US&sort_by=popularity.desc")
 
-    // ── Moods & Discovery (Movies) ───────────────────────────────
+    // ── HBO Max (provider 384) ─────────────────────────────────
+    suspend fun getHboMaxMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_watch_providers=384&watch_region=US&sort_by=popularity.desc")
+
+    suspend fun getHboMaxShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_watch_providers=384&watch_region=US&sort_by=popularity.desc")
+
+    // ── IMDB Top Picks ─────────────────────────────────────────
+    // Oscar winners: voted best at the Academy Awards
+    suspend fun getOscarWinnerMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("certification_country=US&certification.lte=PG-13&sort_by=vote_average.desc&vote_count.gte=500&with_original_language=en")
+
+    // Oscar-nominated films (not winners)
+    suspend fun getOscarNominatedMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("certification_country=US&certification.lte=PG-13&vote_count.gte=300&vote_average.gte=7.0&with_original_language=en&sort_by=vote_average.desc")
+
+    // IMDB-style top rated: highest rated movies overall
+    suspend fun getTopRatedMoviesAllTime(): TmdbPage<TmdbMovie> =
+        fetchPage(tmdbUrl("/movie/top_rated"))
+
+    // ── Rotten Tomatoes-style ──────────────────────────────────
+    // High-rated audience hits (like RT Audience Score ≥ 85%)
+    suspend fun getAudienceFavorites(): TmdbPage<TmdbMovie> =
+        discoverMovies("vote_average.gte=7.5&vote_count.gte=1000&sort_by=popularity.desc")
+
+    // ── Franchise / Studio Picks ────────────────────────────────
+    // Marvel Cinematic Universe (studio 420)
+    suspend fun getMarvelMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_companies=420&sort_by=release_date.desc&vote_count.gte=100")
+
+    // Star Wars / Lucasfilm (studio 1)
+    suspend fun getStarWarsMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_companies=1&sort_by=release_date.desc&vote_count.gte=100")
+
+    // Disney animated / family (studio 1241)
+    suspend fun getDisneyFamilyMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_companies=1241&sort_by=popularity.desc&vote_count.gte=200")
+
+    // Warner Bros / DC (studio 2)
+    suspend fun getDcMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_companies=2&sort_by=popularity.desc&vote_count.gte=200")
+
+    // Fast & Furious (studio 444)
+    suspend fun getFastFuriousMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_companies=444&sort_by=release_date.desc&vote_count.gte=100")
+
+    // Pixar
+    suspend fun getPixarMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_companies=3&sort_by=release_date.desc&vote_count.gte=500")
+
+    // Harry Potter / WB family (studio 4907)
+    suspend fun getHarryPotterMovies(): TmdbPage<TmdbMovie> =
+        discoverMovies("with_companies=4907&sort_by=release_date.asc&vote_count.gte=500")
+
+    // ── Streaming Platforms (Shows) ─────────────────────────────
     suspend fun getNewReleaseMovies(): TmdbPage<TmdbMovie> {
         val cutoff = java.time.LocalDate.now().minusDays(90).toString()
         return discoverMovies("primary_release_date.gte=$cutoff&sort_by=popularity.desc&vote_count.gte=50")
@@ -209,6 +274,23 @@ class TmdbApiService(context: Context, private val baseUrl: String = "https://ap
 
     suspend fun getKoreanDramas(): TmdbPage<TmdbShow> =
         discoverShows("with_original_language=ko&sort_by=popularity.desc&vote_count.gte=30")
+
+    // ── Franchise / Studio Shows ────────────────────────────────
+    // Marvel TV (studio 420)
+    suspend fun getMarvelShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_companies=420&sort_by=popularity.desc&vote_count.gte=50")
+
+    // Star Wars TV (studio 1)
+    suspend fun getStarWarsShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_companies=1&sort_by=popularity.desc&vote_count.gte=50")
+
+    // Disney+ Originals TV (studio 1241)
+    suspend fun getDisneyShowsAll(): TmdbPage<TmdbShow> =
+        discoverShows("with_companies=1241&sort_by=popularity.desc&vote_count.gte=100")
+
+    // Warner Bros TV (studio 2)
+    suspend fun getDcShows(): TmdbPage<TmdbShow> =
+        discoverShows("with_companies=2&sort_by=popularity.desc&vote_count.gte=50")
 
     private suspend inline fun <reified T> fetchPage(url: String): TmdbPage<T> =
         withContext(Dispatchers.IO) {

@@ -68,8 +68,11 @@ fun SeriesHome(
     isGridLoading: Boolean = false,
     initialScrollIndex: Int = -1,
     onScrollRestored: () -> Unit = {},
-    onScrollPositionChange: (Int) -> Unit = {}
+    onScrollPositionChange: (Int) -> Unit = {},
+    onBack: (() -> Unit)? = null,
 ) {
+    // Stremio-style: when genreName is NOT "Discover TV Shows", we're in a category drill-in view.
+    val isDiscoverView = content.genreName == "Discover TV Shows"
     // Hero auto-rotation state
     val heroItems = content.items.take(10) // showcase up to 10 items
     var heroIndex by remember { mutableIntStateOf(0) }
@@ -95,6 +98,40 @@ fun SeriesHome(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // ── Stremio-style drill-in view ──
+        if (!isDiscoverView) {
+            BackRow(
+                label = content.genreName,
+                onBack = { onBack?.invoke() }
+            )
+            if (content.items.isEmpty()) {
+                Box(
+                    Modifier.fillMaxSize().padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("📺", fontSize = 48.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Text("No titles found", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TextMuted)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Try a different category or check your connection", fontSize = 12.sp, color = TextMuted.copy(alpha = 0.6f))
+                    }
+                }
+            } else {
+                TmdbShowGrid(
+                    content = content,
+                    favorites = favorites,
+                    onSelectShow = onSelectShow,
+                    onToggleFavorite = onToggleFavorite,
+                    isGridLoading = isGridLoading,
+                    initialScrollIndex = initialScrollIndex,
+                    onScrollRestored = onScrollRestored,
+                    onScrollPositionChange = onScrollPositionChange,
+                    onBack = onBack
+                )
+            }
+        } else {
+        // ── Discover view ──
         val filteredContinueWatching = continueWatchingItems.filter { it.type == "series" || it.type == "episode" }
         if (filteredContinueWatching.isNotEmpty() && onPlayRecent != null) {
             ContinueWatchingStrip(
@@ -233,8 +270,10 @@ fun SeriesHome(
                 onScrollPositionChange = onScrollPositionChange
             )
         }
+        }
     }
 }
+
 @OptIn(ExperimentalFoundationApi::class, FlowPreview::class)
 @Composable
 fun TmdbShowGrid(
@@ -245,7 +284,8 @@ fun TmdbShowGrid(
     isGridLoading: Boolean = false,
     initialScrollIndex: Int = -1,
     onScrollRestored: () -> Unit = {},
-    onScrollPositionChange: (Int) -> Unit = {}
+    onScrollPositionChange: (Int) -> Unit = {},
+    onBack: (() -> Unit)? = null,
 ) {
     val firstFocus = remember { FocusRequester() }
     val listState = rememberLazyGridState()
@@ -293,33 +333,40 @@ fun TmdbShowGrid(
     if (isGridLoading) {
         ShimmerShowGrid()
     } else {
-        LazyVerticalGrid(
-            state = listState,
-            columns = GridCells.Adaptive(120.dp),
-            modifier = Modifier
-                .fillMaxSize()
-                .rizzoFocusGroup()
-                .gridTopRowFocus(firstFocus),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(content.items, key = { it.id }, contentType = { "TmdbShow" }) { show ->
-                val isFirst = content.items.firstOrNull()?.id == show.id
-                TmdbPosterCard(
-                    title = show.name,
-                    posterPath = show.posterPath,
-                    rating = show.rating,
-                    year = show.firstAirDate.take(4),
-                    overview = show.overview,
-                    isFavorite = favorites.containsKey(show.id.toString()),
-                    onClick = { onSelectShow(show) },
-                    onLongClick = { onToggleFavorite(show) },
-
-                    modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier,
-                    cardWidth = 120.dp,
-                    posterHeight = 180.dp
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (onBack != null) {
+                BackRow(
+                    label = content.genreName,
+                    onBack = onBack
                 )
+            }
+            LazyVerticalGrid(
+                state = listState,
+                columns = GridCells.Adaptive(120.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .rizzoFocusGroup()
+                    .gridTopRowFocus(firstFocus),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(content.items, key = { it.id }, contentType = { "TmdbShow" }) { show ->
+                    val isFirst = content.items.firstOrNull()?.id == show.id
+                    TmdbPosterCard(
+                        title = show.name,
+                        posterPath = show.posterPath,
+                        rating = show.rating,
+                        year = show.firstAirDate.take(4),
+                        overview = show.overview,
+                        isFavorite = favorites.containsKey(show.id.toString()),
+                        onClick = { onSelectShow(show) },
+                        onLongClick = { onToggleFavorite(show) },
+                        modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier,
+                        cardWidth = 120.dp,
+                        posterHeight = 180.dp
+                    )
+                }
             }
         }
     }

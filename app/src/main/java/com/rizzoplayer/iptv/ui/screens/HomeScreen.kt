@@ -395,7 +395,8 @@ private fun MoviesContent(
                     isGridLoading = state.isGridLoading,
                     initialScrollIndex = state.restoreGridScrollIndex,
                     onScrollRestored = viewModel::clearGridScrollRestore,
-                    onScrollPositionChange = { viewModel.updateGridScroll(it) }
+                    onScrollPositionChange = { viewModel.updateGridScroll(it) },
+                    onBack = viewModel::goBack,
                 )
             }
             is BrowseContent.TmdbMovieDetail -> {
@@ -513,7 +514,8 @@ private fun ShowsContent(
                     isGridLoading = state.isGridLoading,
                     initialScrollIndex = state.restoreGridScrollIndex,
                     onScrollRestored = viewModel::clearGridScrollRestore,
-                    onScrollPositionChange = { viewModel.updateGridScroll(it) }
+                    onScrollPositionChange = { viewModel.updateGridScroll(it) },
+                    onBack = viewModel::goBack,
                 )
             }
             is BrowseContent.TmdbShowDetail -> {
