@@ -1,7 +1,89 @@
-# State — v4-polish Branch
+# State — v5/main Branch
 
 ## Branch
-`v4-polish` (based on `v4-genesis`)
+`v5/main` (worktree at `/Users/johnrizzetto/RizzoIPTVPlayer`)
+
+## Active Session — Phase 2 & Phase 3 (2026-05-05)
+
+**Commit:** `c8b7761` — "Phase 2 focus fixes + Phase 3 cinematic glow v5"
+
+### Phase 2 — Navigation & Focus Bug Fixes
+
+**Bug Fix 1 — BackHandler overlay priority (HomeScreen.kt):**
+- Back press now checks overlays in order before navigating: `tmdbStreamSelection` → `playbackPrep` → `goBack()`
+- Fixes: pressing Back while stream selection overlay was open would skip dismissal and jump to home
+- File: `ui/screens/HomeScreen.kt`
+
+**Bug Fix 2 — Episode row focus freeze (SeriesHome.kt TmdbShowDetailView):**
+- Root cause: `LaunchedEffect(episodes)` fired `requestFocus()` on every LazyColumn recomposition — scroll events cascaded into focus races, freezing the cursor on the 4th episode
+- Fix: `animateScrollToItem()` guarantees scroll is committed before focus is requested; `seasonChangeId` counter ensures focus only fires on explicit season changes, not on every scroll
+- Files: `ui/screens/home/SeriesHome.kt`
+
+**Bug Fix 3 — Season/episode two-pane D-pad routing (SeriesHome.kt):**
+- Season tabs extracted to `SeasonTab` composable with explicit `FocusRequester` anchor
+- `LazyColumn.focusProperties { up = seasonTabFocus; down = episodeFocus }` wires D-pad up from episode list back to season tabs
+- `SeasonTab.onSelect` fires only on click/OK press — prevents accidental season switches during D-pad hover navigation
+- New imports: `LazyListState`, `rememberLazyListState`, `focusProperties`
+
+### Phase 3 — UI/UX Enhancement
+
+**Added — Cinematic glow for focused cards (rizzoFocusable.kt):**
+- New parameter: `hasGlow: Boolean = false` on `rizzoFocusable()`
+- When `true`: doubled shadow elevation (16.dp) with `RizzoAccent`-tinted ambient/spot color → soft purple bloom halo
+- Increased border opacity (0.85f vs 0.5f) for sharper focused edge
+- Defaults to `false` — fully backwards-compatible, no existing call sites affected
+- Files: `ui/designsystem/rizzoFocusable.kt`
+
+**Typography — Pre-existing, verified sound (RizzoTypography.kt):**
+- Min body: 16.sp, preferred: 18.sp; `displayLarge`: 48.sp; `FontWeight.Black` for titles
+- No changes needed
+
+### Build Verification
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL
+- `./gradlew ktlintCheck` → BUILD SUCCESSFUL
+
+---
+
+## Prior Sessions
+
+### v5 — TorBox Stream Selection Bug Fixes (COMPLETED)
+**Branch:** `v5/p0-rename-cancellation` (worktree at `/Users/johnrizzetto/v5-p0-phase0`)
+**Commit:** `79d3198`
+
+**Bug #1 — "No streams found" when torrents exist:**
+- Root cause: bare `.await()` calls in `fetchMovieStreams`/`fetchEpisodeStreams` — if either async block threw, the whole coroutineScope collapsed to empty
+- Fix: wrap each `await()` individually in try/catch, log warning, return `emptyList()` — one source's failure no longer poisons the merged result
+
+**Bug #2 — Clicking selected torrent shows premature failure:**
+- Root cause: `playSelectedTmdbStream` called `resolveMovie(imdbId)` which re-searches and picks #1 ranked torrent, ignoring the user's actual selection
+- Fix: new `resolveSelectedTorrent(stream, fallbackHashes)` in TorBoxRepository — plays the explicitly chosen UnifiedTorrent directly, no re-search, passes fallback hashes for retry chain
+
+### v4 — Completed
+
+## IPTV Credentials (Hardcoded)
+- Username: `87bcb5ed3f`
+- Password: `c46e2b805d`
+- URLs: `http://line.trexgaminghub.xyz`, `http://line.gaminghubott.xyz`, `http://vpn.gaminghubott.xyz`, `http://line.gaminghubpro.xyz`, `http://vpn.gaminghubpro.xyz`
+- Auto-login: `DefaultCredentials` object in `MainActivity.kt`, triggered via `autoLoginIfNeeded()` in `LaunchedEffect`
+
+## Git Log (v4-genesis..HEAD)
+```
+c8b7761 Phase 2 focus fixes + Phase 3 cinematic glow v5
+fa6fefb fix(search): five-bug search pipeline overhaul
+d2aa8f4 fix(search): render ErrorView in Movies and Shows search paths when state.error is non-null
+d056e6f chore(search): remove dead setGridLoading and clearGridLoading functions
+6a5083b fix(auth): auto-login with hardcoded IPTV credentials on app launch
+b474752 test(search): assert error state semantics in MainViewModel and BrowseContent
+6cd0772 test(search): regression guard for 401 propagation
+c8669ef fix(search): propagate exceptions from searchAll, skip caching empty results
+1643b1d fix(search): require non-blank TMDB_BEARER, throw on non-2xx responses
+```
+
+## Files Changed This Session
+- `ui/screens/HomeScreen.kt` — BackHandler overlay priority ordering
+- `ui/screens/home/SeriesHome.kt` — scroll-to-focus coordination, SeasonTab composable, focusProperties imports
+- `ui/designsystem/rizzoFocusable.kt` — hasGlow parameter, cinematic glow shadow
+- `CHANGELOG.md` — Phase 2 and Phase 3 entries added
 
 ## Completed
 
