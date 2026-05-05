@@ -19,7 +19,13 @@ class TorrentioService(context: Context) {
             .url("$baseUrl$endpoint")
             .build()
         client.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: throw Exception("Empty body")
+            val code = response.code
+            val body = response.body?.string() ?: ""
+            // Return empty streams on HTTP errors or empty bodies rather than crashing.
+            // The caller treats an empty stream list as "no streams available".
+            if (body.isBlank() || code !in 200..299) {
+                return@use TorrentioResponse(streams = emptyList())
+            }
             json.decodeFromString<TorrentioResponse>(body)
         }
     }

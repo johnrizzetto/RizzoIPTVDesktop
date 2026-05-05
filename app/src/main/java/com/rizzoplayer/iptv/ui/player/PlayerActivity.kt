@@ -122,6 +122,10 @@ class PlayerActivity : ComponentActivity() {
     private var vodControlsJob: Job? = null
     private var positionSaveJob: Job? = null
 
+    // VOD retry guard — prevent infinite retry loops on permanently dead streams
+    private var vodRetryCount = 0
+    private val MAX_VOD_RETRIES = 3
+
     // Batch position save — MutableStateFlow polled every 250ms, saves every 5s
     private val _positionFlow = MutableStateFlow(0L)
     private var lastSaveTimeMs = 0L
@@ -223,6 +227,8 @@ class PlayerActivity : ComponentActivity() {
                 onRetrySetup     = { retryJob = it },
                 onBack           = ::finish,
                 onVodPlaybackError = ::onVodPlaybackError,
+                vodRetryCount    = vodRetryCount,
+                maxVodRetries    = MAX_VOD_RETRIES,
                 onSwitchChannel  = { newUrl, _ -> currentUrl = newUrl }
             )
         }
@@ -492,6 +498,9 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        // Pause playback when app goes to background (HOME press, sleep, PiP entry).
+        // ExoPlayer continues to hold resources but stops consuming network/battery.
+        player?.pause()
         savePositionNow()
     }
 
@@ -570,8 +579,13 @@ private fun PlayerScreen(
     playerError: State<String?>,
     onDismissError: () -> Unit,
     onPlayerError: (String) -> Unit,
-    onVodPlaybackError: () -> Unit
+    onVodPlaybackError: () -> Unit,
+    // VOD retry state hoisted from Activity so DisposableEffect can access it
+    vodRetryCount: Int,
+    maxVodRetries: Int
 ) {
+    // Local mutable copy of the retry counter — avoids captured-var reassignment issues
+    var localVodRetryCount by remember { mutableIntStateOf(vodRetryCount) }
     val scope = rememberCoroutineScope()
     val appContext = LocalContext.current.applicationContext
 
@@ -593,7 +607,18 @@ private fun PlayerScreen(
             }
             override fun onPlayerError(error: PlaybackException) {
                 if (isVod) {
-                    onVodPlaybackError()
+                    localVodRetryCount++
+                    if (localVodRetryCount > maxVodRetries) {
+                        // Permanently dead stream — surface error to UI and stop retrying
+                        onPlayerError("Stream unavailable. Please try another source.")
+                    } else {
+                        // Retry with exponential back-off (3s, 6s, 9s)
+                        scope.launch {
+                            delay(3_000L * localVodRetryCount)
+                            player.prepare()
+                            player.play()
+                        }
+                    }
                 } else {
                     val retryJob = scope.launch {
                         delay(3_000)

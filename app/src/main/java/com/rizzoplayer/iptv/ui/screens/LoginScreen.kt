@@ -22,13 +22,14 @@ import com.rizzoplayer.iptv.R
 import com.rizzoplayer.iptv.ui.theme.*
 import com.rizzoplayer.iptv.ui.viewmodel.LoginUiState
 import com.rizzoplayer.iptv.ui.viewmodel.LoginViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel,
     onLoginSuccess: () -> Unit
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
     var url      by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }

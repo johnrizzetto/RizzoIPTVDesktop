@@ -48,6 +48,7 @@ import com.rizzoplayer.iptv.ui.theme.*
 import com.rizzoplayer.iptv.ui.viewmodel.MainViewModel
 import com.rizzoplayer.iptv.ui.viewmodel.BrowseContent
 import com.rizzoplayer.iptv.ui.viewmodel.Section
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ROOT — Sidebar + NavHost
@@ -56,10 +57,10 @@ import com.rizzoplayer.iptv.ui.viewmodel.Section
 @Composable
 fun HomeScreen(viewModel: MainViewModel) {
     val navController = rememberNavController()
-    val state by viewModel.state.collectAsState()
-    val favorites by viewModel.favorites.collectAsState()
-    val favoritesList by viewModel.favoritesList.collectAsState()
-    val continueWatching by viewModel.watchHistory.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val favoritesList by viewModel.favoritesList.collectAsStateWithLifecycle()
+    val continueWatching by viewModel.watchHistory.collectAsStateWithLifecycle()
 
     // Which top-level screen is currently active — drives sidebar highlight
     // Observe NavHost directly so sidebar highlight stays in sync with actual navigation

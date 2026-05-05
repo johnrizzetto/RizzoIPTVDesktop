@@ -275,8 +275,22 @@ class MainViewModel(
     private var currentFallbackHashes: List<String> = emptyList()
     private var currentPlaybackTitle: String = ""
     private var currentContentType: String = ""
+    // Guard against concurrent onPlaybackError calls — prevents duplicate fallback chains
+    @Volatile private var playbackErrorInProgress = false
 
     fun onPlaybackError() {
+        viewModelScope.launch {
+            if (playbackErrorInProgress) return@launch
+            playbackErrorInProgress = true
+            try {
+                _onPlaybackErrorLocked()
+            } finally {
+                playbackErrorInProgress = false
+            }
+        }
+    }
+
+    private suspend fun _onPlaybackErrorLocked() {
         val hashes = currentFallbackHashes
         if (hashes.isEmpty()) {
             // No fallbacks available — surface an error only if this was a TorBox play
@@ -337,7 +351,13 @@ class MainViewModel(
                 connection.connectTimeout = 8_000
                 connection.readTimeout = 8_000
                 connection.requestMethod = "HEAD"
-                connection.connect()
+                try {
+                    connection.connect()
+                } catch (e: Exception) {
+                    // Network error during redirect chain — stream is inaccessible
+                    connection.disconnect()
+                    return@withContext ""
+                }
                 val code = connection.responseCode
                 val location = connection.getHeaderField("Location")
                 connection.disconnect()
@@ -351,7 +371,8 @@ class MainViewModel(
             current
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            url
+            // Network or redirect error — return empty so caller fails gracefully
+            ""
         }
     }
 
@@ -364,9 +385,13 @@ class MainViewModel(
 
     private val recentUrlCache = mutableMapOf<String, String>() // id → url
     private val favoriteUrlCache = mutableMapOf<String, String>() // id → url
+    private var urlCacheJob: Job? = null
+
     private fun launchUrlCacheRefresh() {
+        // Cancel any in-flight refresh if server or credentials changed
+        urlCacheJob?.cancel()
         val creds = _state.value.credentials ?: return
-        viewModelScope.launch(Dispatchers.IO) {
+        urlCacheJob = viewModelScope.launch(Dispatchers.IO) {
             // Refresh recent URLs in parallel
             val recentDeferreds = recentlyWatched.value.take(8).map { item ->
                 async {
