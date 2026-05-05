@@ -36,6 +36,10 @@ import com.rizzoplayer.iptv.ui.theme.Spec
  * - Subtle [focusBackgroundColor] tint background on focus
  * - Scale-up on focus (1.06x), scale-down on press (0.95x)
  * - Shadow elevation (8.dp) on focus
+ * - Optional cinematic glow: soft outer bloom using [RizzoAccentGlow]
+ *
+ * @param hasGlow When true, adds a soft 12.dp blur glow in RizzoAccent color behind the card
+ *                on focus — creates the "Stremio-style" cinematic bloom at TV viewing distance.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Stable
@@ -47,6 +51,7 @@ fun Modifier.rizzoFocusable(
     focusBorderColor: Color = RizzoAccent,
     focusBackgroundColor: Color = RizzoAccentDim,
     interactionSource: MutableInteractionSource? = null,
+    hasGlow: Boolean = false,
 ): Modifier = composed {
     val actualInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
     val isFocused by actualInteractionSource.collectIsFocusedAsState()
@@ -62,18 +67,34 @@ fun Modifier.rizzoFocusable(
         label = "tvClickableScale",
     )
 
+    // Animated glow alpha — swells in when focused, fades out when unfocused
+    val glowAlpha by animateFloatAsState(
+        targetValue = if (isFocused && hasGlow) 1f else 0f,
+        animationSpec = RizzoMotion.GentleSpring,
+        label = "glowAlpha",
+    )
+
     this
         .scale(scale)
         .then(
-            if (isFocused) Modifier.shadow(Spec.focusElevation, shape)
-            else Modifier
+            if (isFocused) {
+                // Cinematic glow via tinted shadow: uses RizzoAccent as the shadow color
+                // (ambientColor / spotColor) to produce a soft colored bloom behind the card.
+                // For hasGlow=true, we double the elevation and tighten the alpha for a
+                // more pronounced "Stremio-style" halo. The glow is entirely handled by
+                // the shadow modifier — no drawBehind needed inside composed.
+                val glowElevation = if (hasGlow) Spec.focusElevation * 2 else Spec.focusElevation
+                val glowAmbient = if (hasGlow) RizzoAccent.copy(alpha = 0.40f) else RizzoAccent.copy(alpha = 0.25f)
+                val glowSpot = if (hasGlow) RizzoAccent.copy(alpha = 0.40f) else RizzoAccent.copy(alpha = 0.25f)
+                Modifier.shadow(glowElevation, shape, ambientColor = glowAmbient, spotColor = glowSpot)
+            } else Modifier
         )
         .background(
             color = if (isFocused) focusBackgroundColor else Color.Transparent,
             shape = shape,
         )
         .then(
-            if (isFocused) Modifier.border(focusBorderWidth, focusBorderColor.copy(alpha = 0.5f), shape)
+            if (isFocused) Modifier.border(focusBorderWidth, focusBorderColor.copy(alpha = if (hasGlow) 0.85f else 0.5f), shape)
             else Modifier,
         )
         .combinedClickable(

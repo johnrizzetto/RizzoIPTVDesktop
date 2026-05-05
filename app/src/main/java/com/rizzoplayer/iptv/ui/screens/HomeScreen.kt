@@ -68,13 +68,23 @@ fun HomeScreen(viewModel: MainViewModel) {
 
     BackHandler {
         when {
+            // Priority 1: If a premium stream selection overlay is showing, dismiss it first
+            state.tmdbStreamSelection != null -> {
+                viewModel.dismissTmdbStreamSelection()
+                return@BackHandler
+            }
+            // Priority 2: If a playback prep overlay is showing, cancel it
+            state.playbackPrep != null -> {
+                viewModel.cancelPlaybackPrep()
+                return@BackHandler
+            }
+            // Priority 3: Navigate back through the view hierarchy
             state.canGoBack -> {
                 viewModel.goBack()
                 return@BackHandler
             }
-            else -> {
-                // At top-level with nowhere to go back to — absorb the back press silently
-            }
+            // At top-level with nowhere to go back to — absorb silently
+            else -> { return@BackHandler }
         }
     }
 

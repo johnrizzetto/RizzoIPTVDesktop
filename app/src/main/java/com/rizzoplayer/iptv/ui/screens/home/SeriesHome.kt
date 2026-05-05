@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -343,18 +346,14 @@ fun TmdbShowDetailView(
     val poster = show.posterPath?.let { "${AppConfig.TMDB_IMAGE_BASE}/${AppConfig.TMDB_POSTER_SIZE}$it" }
     var selectedSeasonIdx by remember { mutableIntStateOf(nextSeasonIdx) }
     val episodeFocus = remember { FocusRequester() }
-    var episodeFocusTrigger by remember { mutableIntStateOf(0) }
+    // Tracks season changes to trigger scroll-to-focus after layout settles
+    var seasonChangeId by remember { mutableIntStateOf(0) }
+    val episodeListState = rememberLazyListState()
+    // Focus anchor for the season tabs row — DOWN from the episode list routes here
+    val seasonTabFocus = remember { FocusRequester() }
 
-    // Single effect — fires on initial composition (trigger = 0 means "initial load")
-    // and re-fires each time the user switches seasons (trigger increments).
-    // LaunchedEffect(Unit) removed: it raced with the trigger effect and caused
-    // erratic focus on every recomposition.
-    LaunchedEffect(episodeFocusTrigger) {
-        withFrameNanos { } // wait for layout to attach the focusRequester
-        try { episodeFocus.requestFocus() } catch (_: Exception) {}
-    }
-
-    // Speculatively prefetch stream for the first episode of the selected season
+    // Speculatively prefetch stream for the first episode of the selected season.
+    // Keyed to selectedSeasonIdx so it fires when the user actually switches seasons.
     LaunchedEffect(selectedSeasonIdx, seasons) {
         val firstEp = seasons.getOrNull(selectedSeasonIdx)?.episodes?.firstOrNull()
         firstEp?.let { ep ->
@@ -362,6 +361,18 @@ fun TmdbShowDetailView(
                 viewModel.prefetchStream(imdbId, ep.seasonNumber, ep.episodeNumber)
             }
         }
+    }
+
+    // Scroll-to-focus: fires only when the user actually switches seasons (seasonChangeId increments).
+    // Uses animateScrollToItem to guarantee the scroll is committed before requesting focus,
+    // preventing the "cursor frozen on 4th item" bug that occurred when focus was requested
+    // before the LazyColumn had scrolled to the target episode.
+    LaunchedEffect(seasonChangeId, selectedSeasonIdx, nextEpisodeIdx) {
+        val targetEpisodeIdx = if (selectedSeasonIdx == nextSeasonIdx) nextEpisodeIdx else 0
+        episodeListState.animateScrollToItem(targetEpisodeIdx)
+        // animateScrollToItem is suspending — it completes before we request focus
+        withFrameNanos { } // one additional frame for LazyColumn to recompose at new scroll position
+        try { episodeFocus.requestFocus() } catch (_: Exception) {}
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -438,50 +449,61 @@ fun TmdbShowDetailView(
             }
         }
 
-        // Season tabs
+        // Season tabs — two-pane: LEFT/RIGHT navigate between tabs, DOWN goes to episode list
         if (seasons.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .focusRequester(seasonTabFocus),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 seasons.forEachIndexed { idx, season ->
-                    val seasonInteractionSource = remember { MutableInteractionSource() }
-                    val seasonFocused by seasonInteractionSource.collectIsFocusedAsState()
                     val isSelected = idx == selectedSeasonIdx
-                    Text(
-                        season.name,
-                        fontSize = 12.sp,
-                        color = if (isSelected) AccentBlue else if (seasonFocused) TextPrimary else TextMuted,
-                        fontWeight = if (isSelected || seasonFocused) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier
-                            .background(if (isSelected) AccentBlue.copy(alpha = 0.2f) else Color.Transparent, RoundedCornerShape(4.dp))
-                            .rizzoFocusable(
-                                onClick = {
-                                    selectedSeasonIdx = idx
-                                    episodeFocusTrigger++
-                                },
-                                interactionSource = seasonInteractionSource,
-                                shape = RoundedCornerShape(4.dp),
-                                focusBorderColor = if (isSelected) Color.Transparent else AccentBlue,
-                                focusBackgroundColor = Color.Transparent
-                            )
-                            .onFocusChanged { if (it.isFocused && !isSelected) { selectedSeasonIdx = idx; episodeFocusTrigger++ } }
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    SeasonTab(
+                        label = season.name,
+                        isSelected = isSelected,
+                        episodeCount = season.episodeCount,
+                        onSelect = {
+                            if (idx != selectedSeasonIdx) {
+                                selectedSeasonIdx = idx
+                                seasonChangeId++
+                            }
+                        }
                     )
                 }
             }
         }
 
-        // Episodes list
+        // Episodes list — two-pane: UP from first episode returns to season tabs,
+        // DOWN from last episode wraps to first episode
         seasons.getOrNull(selectedSeasonIdx)?.episodes?.let { episodes ->
-            LaunchedEffect(episodes) { try { episodeFocus.requestFocus() } catch (_: Exception) {} }
+            val targetEpisodeIdx = if (selectedSeasonIdx == nextSeasonIdx) nextEpisodeIdx else 0
+            LaunchedEffect(episodes) {
+                // Only run on initial composition (episodes first available).
+                // Season-change focus is handled by seasonChangeId effect above.
+                if (targetEpisodeIdx == 0) {
+                    try { episodeFocus.requestFocus() } catch (_: Exception) {}
+                }
+            }
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                state = episodeListState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp)
+                    .focusProperties {
+                        // UP from episode list → season tabs
+                        up = seasonTabFocus
+                        // DOWN from episode list → wraps to first episode
+                        down = episodeFocus
+                    },
                 contentPadding = PaddingValues(vertical = 4.dp)
             ) {
-                itemsIndexed(episodes, key = { _, it -> "${it.seasonNumber}-${it.episodeNumber}" }, contentType = { _, _ -> "TmdbEpisode" }) { index, episode ->
+                itemsIndexed(
+                    episodes,
+                    key = { _, it -> "${it.seasonNumber}-${it.episodeNumber}" },
+                    contentType = { _, _ -> "TmdbEpisode" }
+                ) { index, episode ->
                     val isFav = favorites.containsKey("${show.id}:${episode.seasonNumber}:${episode.episodeNumber}")
                     // Focus the calculated next episode on initial load, or the first episode if season changed
                     val shouldFocus = if (selectedSeasonIdx == nextSeasonIdx) index == nextEpisodeIdx else index == 0
@@ -494,6 +516,71 @@ fun TmdbShowDetailView(
                         onFocus = if (shouldFocus) episodeFocus else null
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Single season tab composable with proper D-pad focus routing.
+ * onSelect is only triggered on click/OK press, not on focus enter,
+ * preventing unwanted season switches during D-pad navigation.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SeasonTab(
+    label: String,
+    isSelected: Boolean,
+    episodeCount: Int?,
+    onSelect: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val seasonTabFocus = remember { FocusRequester() }
+
+    LaunchedEffect(isFocused) {
+        if (isFocused) {
+            // Request focus on the row anchor so LazyColumn.up routes here
+            try { seasonTabFocus.requestFocus() } catch (_: Exception) {}
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .focusRequester(seasonTabFocus)
+            .background(
+                if (isSelected) AccentBlue.copy(alpha = 0.2f)
+                else if (isFocused) RizzoAccentDim
+                else Color.Transparent,
+                RoundedCornerShape(4.dp)
+            )
+            .then(
+                if (isFocused && !isSelected) Modifier.border(1.5.dp, AccentBlue.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                else Modifier
+            )
+            .rizzoFocusable(
+                onClick = onSelect,
+                interactionSource = interactionSource,
+                shape = RoundedCornerShape(4.dp),
+                focusBorderColor = Color.Transparent,
+                focusBackgroundColor = Color.Transparent
+            )
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                label,
+                fontSize = 12.sp,
+                color = if (isSelected) AccentBlue else if (isFocused) TextPrimary else TextMuted,
+                fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal,
+            )
+            if (episodeCount != null && episodeCount > 0) {
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "($episodeCount)",
+                    fontSize = 10.sp,
+                    color = if (isSelected) AccentBlue.copy(alpha = 0.7f) else TextMuted.copy(alpha = 0.7f)
+                )
             }
         }
     }
