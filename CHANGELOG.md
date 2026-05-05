@@ -13,6 +13,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - `docs/ARCHITECTURE-v6.md` — full architecture analysis of TMDB pipeline, category ID system, bug inventory, and data flow diagrams.
+- **Stremio-style drill-in navigation** — click a curated category → full-screen grid for that category only with back affordance (replaces all-titles-visible-at-once layout).
+- **VOD curated rows overhaul** — reorganized into section headers (IMDB Top Picks, Rotten Tomatoes, Franchise Hub, Streaming, Moods & Discovery); added Oscar Winners (-18), Oscar Nominated (-19), IMDB Top Rated (-20), Certified Fresh (-21), Audience Favorites (-22), Marvel (-34), Star Wars (-35), Disney Family (-36), DC Comics (-37), Fast & Furious (-38), Pixar (-39), Harry Potter (-40).
+- **API additions** — `getOscarWinners()`, `getOscarNominated()`, `getCertifiedFresh()`, `getAudienceFavorites()`, `getMarvelMovies()`, `getStarWarsMovies()`, `getDisneyFamilyMovies()`, `getDcMovies()`, `getFastFuriousMovies()`, `getPixarMovies()`, `getHarryPotterMovies()`, `getHboMaxShows()`, `getAppleTvShows()`
 
 ---
 
